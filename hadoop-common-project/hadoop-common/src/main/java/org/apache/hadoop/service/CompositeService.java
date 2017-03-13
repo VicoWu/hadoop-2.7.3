@@ -119,7 +119,7 @@ public class CompositeService extends AbstractService {
       // will be stopped and an exception raised
       service.start();
     }
-    super.serviceStart();
+    super.serviceStart(); //逐个启动所有的service，比如，ResourceTrackerService
   }
 
   protected void serviceStop() throws Exception {

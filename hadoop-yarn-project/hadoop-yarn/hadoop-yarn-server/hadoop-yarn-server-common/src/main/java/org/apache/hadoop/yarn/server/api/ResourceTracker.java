@@ -27,13 +27,15 @@ import org.apache.hadoop.yarn.server.api.protocolrecords.NodeHeartbeatResponse;
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerRequest;
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerResponse;
 
+//这个类定义了NodeManager和ResoureManager之间的通信协议
 public interface ResourceTracker {
-  
+   //向ResourceManager注册自己
   @Idempotent
   public RegisterNodeManagerResponse registerNodeManager(
       RegisterNodeManagerRequest request) throws YarnException,
       IOException;
 
+  //向ResourceManager发送自己的心跳信息
   @AtMostOnce
   public NodeHeartbeatResponse nodeHeartbeat(NodeHeartbeatRequest request)
       throws YarnException, IOException;

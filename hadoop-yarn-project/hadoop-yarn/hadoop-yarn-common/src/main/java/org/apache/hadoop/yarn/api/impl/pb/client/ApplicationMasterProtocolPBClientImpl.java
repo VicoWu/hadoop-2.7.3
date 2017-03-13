@@ -55,6 +55,7 @@ public class ApplicationMasterProtocolPBClientImpl implements ApplicationMasterP
 
   public ApplicationMasterProtocolPBClientImpl(long clientVersion, InetSocketAddress addr,
       Configuration conf) throws IOException {
+	//设置applicationMaster和ResourceManager进行通信的RPC协议，明显的，是使用ProtocolBuf协议而不是Writable 协议
     RPC.setProtocolEngine(conf, ApplicationMasterProtocolPB.class, ProtobufRpcEngine.class);
     proxy =
         (ApplicationMasterProtocolPB) RPC.getProxy(ApplicationMasterProtocolPB.class, clientVersion,

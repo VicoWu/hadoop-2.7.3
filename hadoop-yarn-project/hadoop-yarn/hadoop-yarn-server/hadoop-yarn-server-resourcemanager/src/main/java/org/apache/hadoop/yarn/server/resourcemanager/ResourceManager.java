@@ -1041,10 +1041,11 @@ public class ResourceManager extends CompositeService implements Recoverable {
     LOG.info("Transitioned to standby state");
   }
 
+  //启动resourceManager服务
   @Override
   protected void serviceStart() throws Exception {
     if (this.rmContext.isHAEnabled()) {
-      transitionToStandby(true);
+      transitionToStandby(true);//如果HA模式，则进入standBy模式
     } else {
       transitionToActive();
     }
