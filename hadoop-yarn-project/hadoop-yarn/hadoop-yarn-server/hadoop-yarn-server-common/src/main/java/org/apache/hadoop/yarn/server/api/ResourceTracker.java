@@ -29,14 +29,15 @@ import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerResp
 
 //这个类定义了NodeManager和ResoureManager之间的通信协议
 public interface ResourceTracker {
-   //向ResourceManager注册自己
+   //向ResourceManager注册自己,多次注册需要具有幂等性
   @Idempotent
   public RegisterNodeManagerResponse registerNodeManager(
       RegisterNodeManagerRequest request) throws YarnException,
       IOException;
 
   //向ResourceManager发送自己的心跳信息
-  @AtMostOnce
+//最多只能执行一次
+  @AtMostOnce 
   public NodeHeartbeatResponse nodeHeartbeat(NodeHeartbeatRequest request)
       throws YarnException, IOException;
 

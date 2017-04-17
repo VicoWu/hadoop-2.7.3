@@ -54,6 +54,19 @@ public class HadoopYarnProtoRPC extends YarnRPC {
     RpcFactoryProvider.getClientFactory(conf).stopClient(proxy);
   }
 
+ 
+  /*
+   * 以ResourceTrackerService为例 
+   *@param protocol org.apache.hadoop.yarn.server.api.ResourceTracker
+   *@param instance org.apache.hadoop.yarn.server.resourcemanager.ResourceTrackerService
+   *@param addr
+   *@param conf
+   *@param secretManager
+   *@param numHandlers
+   *@param portRangeConfig
+   *@return
+   *@author wuchang
+   */
   @Override
   public Server getServer(Class protocol, Object instance,
       InetSocketAddress addr, Configuration conf,
@@ -62,7 +75,10 @@ public class HadoopYarnProtoRPC extends YarnRPC {
     LOG.debug("Creating a HadoopYarnProtoRpc server for protocol " + protocol + 
         " with " + numHandlers + " handlers");
     
-    return RpcFactoryProvider.getServerFactory(conf).getServer(protocol, 
+    //protocol ResourceTracker
+    //instance ResourceTrackerService
+    return RpcFactoryProvider.getServerFactory(conf) //org.apache.hadoop.yarn.factories.impl.pb.RpcServerFactoryPBImpl
+    		.getServer(protocol, 
         instance, addr, conf, secretManager, numHandlers, portRangeConfig);
 
   }

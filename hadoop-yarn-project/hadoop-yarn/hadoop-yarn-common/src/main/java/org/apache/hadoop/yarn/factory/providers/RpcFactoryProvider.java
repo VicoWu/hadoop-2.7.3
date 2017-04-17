@@ -38,7 +38,7 @@ public class RpcFactoryProvider {
     
   }
   
-  
+  //默认org.apache.hadoop.yarn.factories.impl.pb.RpcServerFactoryPBImpl
   public static RpcServerFactory getServerFactory(Configuration conf) {
     if (conf == null) {
       conf = new Configuration();

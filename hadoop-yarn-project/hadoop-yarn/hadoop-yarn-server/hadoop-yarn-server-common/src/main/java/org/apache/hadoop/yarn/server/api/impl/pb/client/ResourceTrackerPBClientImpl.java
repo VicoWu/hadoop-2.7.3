@@ -46,11 +46,13 @@ public class ResourceTrackerPBClientImpl implements ResourceTracker, Closeable {
 
 private ResourceTrackerPB proxy;
   
-  public ResourceTrackerPBClientImpl(long clientVersion, InetSocketAddress addr, Configuration conf) throws IOException {
-    RPC.setProtocolEngine(conf, ResourceTrackerPB.class, ProtobufRpcEngine.class);
-    proxy = (ResourceTrackerPB)RPC.getProxy(
-        ResourceTrackerPB.class, clientVersion, addr, conf);
-  }
+	public ResourceTrackerPBClientImpl(long clientVersion, InetSocketAddress addr, Configuration conf)
+			throws IOException {
+		//为protocol注册处理引擎
+		RPC.setProtocolEngine(conf, ResourceTrackerPB.class, ProtobufRpcEngine.class);
+		//设置并获取protocol的代理类
+		proxy = (ResourceTrackerPB) RPC.getProxy(ResourceTrackerPB.class, clientVersion, addr, conf);
+	}
 
   @Override
   public void close() {

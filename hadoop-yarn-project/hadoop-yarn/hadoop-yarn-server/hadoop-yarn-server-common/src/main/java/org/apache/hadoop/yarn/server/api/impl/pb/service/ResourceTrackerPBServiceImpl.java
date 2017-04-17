@@ -39,7 +39,7 @@ import com.google.protobuf.ServiceException;
 
 public class ResourceTrackerPBServiceImpl implements ResourceTrackerPB {
 
-  private ResourceTracker real;
+  private ResourceTracker real; //是一个org.apache.hadoop.yarn.server.resourcemanager.ResourceTrackerService的instance
   
   public ResourceTrackerPBServiceImpl(ResourceTracker impl) {
     this.real = impl;

@@ -82,8 +82,10 @@ import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
+import org.apache.hadoop.ipc.ProtobufRpcEngine.RpcRequestWrapper;
 import org.apache.hadoop.ipc.ProtobufRpcEngine.RpcResponseMessageWrapper;
 import org.apache.hadoop.ipc.ProtobufRpcEngine.RpcResponseWrapper;
+import org.apache.hadoop.ipc.ProtobufRpcEngine.Server;
 import org.apache.hadoop.ipc.RPC.RpcInvoker;
 import org.apache.hadoop.ipc.RPC.VersionMismatch;
 import org.apache.hadoop.ipc.metrics.RpcDetailedMetrics;
@@ -217,16 +219,20 @@ public abstract class Server {
    * Called by static initializers of rpcKind Engines
    * @param rpcKind
    * @param rpcRequestWrapperClass - this class is used to deserialze the
-   *  the rpc request.
-   *  @param rpcInvoker - use to process the calls on SS.
+   *  the rpc request. 所有的rpcRequestWrapperClass必须是一个Writable
+   *  @param rpcInvoker - use to process the calls on SS.用来定义在服务端处理rpc请求的代码
+   *  
+   *  ProtobufRpcEngine .registerProtocolEngine(
+        RPC.RpcKind.RPC_PROTOCOL_BUFFER, RpcRequestWrapper.class,
+        new Server.ProtoBufRpcInvoker())
    */
   
   public static void registerProtocolEngine(RPC.RpcKind rpcKind, 
           Class<? extends Writable> rpcRequestWrapperClass,
           RpcInvoker rpcInvoker) {
     RpcKindMapValue  old = 
-        rpcKindMap.put(rpcKind, new RpcKindMapValue(rpcRequestWrapperClass, rpcInvoker));
     if (old != null) {
+    	rpcKindMap.put(rpcKind, new RpcKindMapValue(rpcRequestWrapperClass, rpcInvoker));
       rpcKindMap.put(rpcKind, old);
       throw new IllegalArgumentException("ReRegistration of rpcKind: " +
           rpcKind);      

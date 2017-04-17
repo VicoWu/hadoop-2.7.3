@@ -49,7 +49,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
   private static final String PB_IMPL_PACKAGE_SUFFIX = "impl.pb.service";
   private static final String PB_IMPL_CLASS_SUFFIX = "PBServiceImpl";
   
-  private static final RpcServerFactoryPBImpl self = new RpcServerFactoryPBImpl();
+  private static final RpcServerFactoryPBImpl self = new RpcServerFactoryPBImpl(); //工厂类，单例模式
 
   private Configuration localConf = new Configuration();
   private ConcurrentMap<Class<?>, Constructor<?>> serviceCache = new ConcurrentHashMap<Class<?>, Constructor<?>>();
@@ -63,6 +63,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
   private RpcServerFactoryPBImpl() {
   }
   
+  
   public Server getServer(Class<?> protocol, Object instance,
       InetSocketAddress addr, Configuration conf,
       SecretManager<? extends TokenIdentifier> secretManager, int numHandlers) {
@@ -70,6 +71,10 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
         null);
   }
   
+  /**
+   * protocol ResourceTracker
+   * instance ResourceTrackerService
+   */
   @Override
   public Server getServer(Class<?> protocol, Object instance,
       InetSocketAddress addr, Configuration conf,
@@ -80,8 +85,10 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     if (constructor == null) {
       Class<?> pbServiceImplClazz = null;
       try {
+    	//pbServiceImplClazz: ResourceTrackerPBServiceImpl
         pbServiceImplClazz = localConf
             .getClassByName(getPbServiceImplClassName(protocol));
+ 
       } catch (ClassNotFoundException e) {
         throw new YarnRuntimeException("Failed to load class: ["
             + getPbServiceImplClassName(protocol) + "]", e);
@@ -99,6 +106,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     
     Object service = null;
     try {
+    	//ResourceTrackerPBServiceImpl
       service = constructor.newInstance(instance);
     } catch (InvocationTargetException e) {
       throw new YarnRuntimeException(e);
@@ -145,6 +153,13 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     return PROTO_GEN_PACKAGE_NAME + "." + srcClassName + "$" + srcClassName + PROTO_GEN_CLASS_SUFFIX;  
   }
   
+  //clazz 例子：
+  /**
+   * org.apache.hadoop.yarn.server.api.ResourceTracker
+   * 变成ResourceTrackerPBServiceImpl
+   * @param clazz
+   * @return  @author wuchang
+   */
   private String getPbServiceImplClassName(Class<?> clazz) {
     String srcPackagePart = getPackageName(clazz);
     String srcClassName = getClassName(clazz);

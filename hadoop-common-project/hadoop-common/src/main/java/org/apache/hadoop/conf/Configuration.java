@@ -2103,6 +2103,7 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
     return ret;
   }
   
+  //使用弱引用缓存保存每一个class string对应的Class，以尽量节省内存
   /**
    * Load a class by name, returning null rather than throwing an exception
    * if it couldn't be loaded. This is to avoid the overhead of creating
@@ -2117,7 +2118,7 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
     synchronized (CACHE_CLASSES) {
       map = CACHE_CLASSES.get(classLoader);
       if (map == null) {
-        map = Collections.synchronizedMap(
+        map = Collections.synchronizedMap( //每一个classload对应了一个 Map<String, WeakReference<Class<?>>
           new WeakHashMap<String, WeakReference<Class<?>>>());
         CACHE_CLASSES.put(classLoader, map);
       }
@@ -2126,7 +2127,7 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
     Class<?> clazz = null;
     WeakReference<Class<?>> ref = map.get(name); 
     if (ref != null) {
-       clazz = ref.get();
+       clazz = ref.get(); //直接获取这个class 字符串对应的Class
     }
      
     if (clazz == null) {

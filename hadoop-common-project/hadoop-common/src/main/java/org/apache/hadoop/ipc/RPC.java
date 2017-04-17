@@ -55,6 +55,7 @@ import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.conf.*;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.Time;
+import org.apache.hadoop.yarn.server.api.ResourceTrackerPB;
 
 import com.google.protobuf.BlockingService;
 
@@ -189,21 +190,24 @@ public class RPC {
   /**
    * Set a protocol to use a non-default RpcEngine.
    * @param conf configuration to use
-   * @param protocol the protocol interface
-   * @param engine the RpcEngine impl
+   * @param protocol the protocol interface 一般是接口的名字
+   *  ResourceTrackerPBClientImpl中RPC.setProtocolEngine(conf, ResourceTrackerPB.class, ProtobufRpcEngine.class);
+   * @param engine the RpcEngine impl 具体的引擎实现，如WritableRpcEngine,ProtobufRpcEngine或者AvroRpcEngine 
    */
   public static void setProtocolEngine(Configuration conf,
                                 Class<?> protocol, Class<?> engine) {
-    conf.setClass(ENGINE_PROP+"."+protocol.getName(), engine, RpcEngine.class);
+    conf.setClass(ENGINE_PROP+"."+protocol.getName(), engine, RpcEngine.class); //所有的engine必须实现RpcEngine， ("rpc.engine.ResourceTrackerPB" -> "ProtobufRpcEngine")
   }
 
   // return the RpcEngine configured to handle a protocol
+  // for protocol ResourceTrackerPB.class , the engine is ProtobufRpcEngine.class
   static synchronized RpcEngine getProtocolEngine(Class<?> protocol,
       Configuration conf) {
     RpcEngine engine = PROTOCOL_ENGINES.get(protocol);
     if (engine == null) {
+    	//如果没有指定protocol名字，则使用WritableRpcEngine，否则，使用指定的protocol对应的engine
       Class<?> impl = conf.getClass(ENGINE_PROP+"."+protocol.getName(),
-                                    WritableRpcEngine.class);
+                                    WritableRpcEngine.class); 
       engine = (RpcEngine)ReflectionUtils.newInstance(impl, conf);
       PROTOCOL_ENGINES.put(protocol, engine);
     }
@@ -585,7 +589,7 @@ public class RPC {
     * Construct a client-side proxy object with the default SocketFactory
     * @param <T>
     * 
-    * @param protocol
+    * @param protocol for ResourceTrackerPBClientImpl, it is  ResourceTrackerPB.class
     * @param clientVersion
     * @param addr
     * @param conf
@@ -792,7 +796,7 @@ public class RPC {
       if (this.instance == null) {
         throw new HadoopIllegalArgumentException("instance is not set");
       }
-      
+      //Engine有ProtobugRpcEngine或者WriteableRpcEngine
       return getProtocolEngine(this.protocol, this.conf).getServer(
           this.protocol, this.instance, this.bindAddress, this.port,
           this.numHandlers, this.numReaders, this.queueSizePerHandler,

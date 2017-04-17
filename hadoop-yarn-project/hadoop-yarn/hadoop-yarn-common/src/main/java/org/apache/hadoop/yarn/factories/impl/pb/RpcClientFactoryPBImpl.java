@@ -44,7 +44,7 @@ public class RpcClientFactoryPBImpl implements RpcClientFactory {
   private static final String PB_IMPL_PACKAGE_SUFFIX = "impl.pb.client";
   private static final String PB_IMPL_CLASS_SUFFIX = "PBClientImpl";
   
-  private static final RpcClientFactoryPBImpl self = new RpcClientFactoryPBImpl();
+  private static final RpcClientFactoryPBImpl self = new RpcClientFactoryPBImpl();//工厂类，单例模式
   private Configuration localConf = new Configuration();
   private ConcurrentMap<Class<?>, Constructor<?>> cache = new ConcurrentHashMap<Class<?>, Constructor<?>>();
   
@@ -109,6 +109,11 @@ public class RpcClientFactoryPBImpl implements RpcClientFactory {
           + "does not provide closeable invocation handler " + proxy.getClass());
   }
 
+  /**
+   * 
+   * @param clazz
+   * @return  @author wuchang
+   */
   private String getPBImplClassName(Class<?> clazz) {
     String srcPackagePart = getPackageName(clazz);
     String srcClassName = getClassName(clazz);

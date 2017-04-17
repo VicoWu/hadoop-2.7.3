@@ -158,7 +158,11 @@ public class ResourceTrackerService extends AbstractService implements
     // ResourceTrackerServer authenticates NodeManager via Kerberos if
     // security is enabled, so no secretManager.
     Configuration conf = getConfig();
-    YarnRPC rpc = YarnRPC.create(conf);
+    
+   //使用yarn自带的基于proto实际上是org.apache.hadoop.yarn.ipc.HadoopYarnProtoRPC
+    YarnRPC rpc = YarnRPC.create(conf); 
+    
+    //创建一个org.apache.hadoop.ipc.RPC.Server
     this.server =
       rpc.getServer(ResourceTracker.class, this, resourceTrackerAddress,
           conf, null,

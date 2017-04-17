@@ -71,7 +71,7 @@ public class ProtobufRpcEngine implements RpcEngine {
   static { // Register the rpcRequest deserializer for WritableRpcEngine 
     org.apache.hadoop.ipc.Server.registerProtocolEngine(
         RPC.RpcKind.RPC_PROTOCOL_BUFFER, RpcRequestWrapper.class,
-        new Server.ProtoBufRpcInvoker());
+        new Server.ProtoBufRpcInvoker()); //类初始化时，向ipc.Server注册自己
   }
 
   private static final ClientCache CLIENTS = new ClientCache();
