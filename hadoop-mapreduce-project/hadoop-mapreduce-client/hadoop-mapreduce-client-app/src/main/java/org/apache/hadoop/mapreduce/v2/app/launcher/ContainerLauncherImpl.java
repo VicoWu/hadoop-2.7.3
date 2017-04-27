@@ -148,6 +148,7 @@ public class ContainerLauncherImpl extends AbstractService implements
         List<StartContainerRequest> list = new ArrayList<StartContainerRequest>();
         list.add(startRequest);
         StartContainersRequest requestList = StartContainersRequest.newInstance(list);
+        //向远程 NodeManager 发送container启动请求
         StartContainersResponse response =
             proxy.getContainerManagementProtocol().startContainers(requestList);
         if (response.getFailedRequests() != null
@@ -274,7 +275,7 @@ public class ContainerLauncherImpl extends AbstractService implements
 
         while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
           try {
-            event = eventQueue.take();
+            event = eventQueue.take(); //从事件队列中取出对应事件
           } catch (InterruptedException e) {
             if (!stopped.get()) {
               LOG.error("Returning, interrupted : " + e);
@@ -308,7 +309,7 @@ public class ContainerLauncherImpl extends AbstractService implements
 
           // the events from the queue are handled in parallel
           // using a thread pool
-          launcherPool.execute(createEventProcessor(event));
+          launcherPool.execute(createEventProcessor(event)); //将事件交给launcherPool线程池进行异步并发处理
 
           // TODO: Group launching of multiple containers to a single
           // NodeManager into a single connection

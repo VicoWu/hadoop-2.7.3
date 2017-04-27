@@ -214,6 +214,7 @@ public class ProtobufRpcEngine implements RpcEngine {
         traceScope = Trace.startSpan(RpcClientUtil.methodToTraceString(method));
       }
 
+      //开始将方法的信息和请求信息进行包装，准备发送给server
       RequestHeaderProto rpcRequestHeader = constructRpcRequestHeader(method);
       
       if (LOG.isTraceEnabled()) {

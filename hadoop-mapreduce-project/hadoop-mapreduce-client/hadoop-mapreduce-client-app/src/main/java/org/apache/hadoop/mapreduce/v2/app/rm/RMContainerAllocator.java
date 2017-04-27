@@ -251,11 +251,14 @@ public class RMContainerAllocator extends RMContainerRequestor
   }
 
   @Override
+  /**
+   * 这个方法重写了父类方法RMCommunicator.heartbeat()， 在父类方法RMCommunicator.startAllocatorThread()方法中被调用
+   */
   protected synchronized void heartbeat() throws Exception {
     scheduleStats.updateAndLogIfChanged("Before Scheduling: ");
-    List<Container> allocatedContainers = getResources();
+    List<Container> allocatedContainers = getResources();//从rm请求资源、container的状态
     if (allocatedContainers != null && allocatedContainers.size() > 0) {
-      scheduledRequests.assign(allocatedContainers);
+      scheduledRequests.assign(allocatedContainers); //将收到的container分配给具体任务
     }
 
     int completedMaps = getJob().getCompletedMaps();
@@ -338,11 +341,13 @@ public class RMContainerAllocator extends RMContainerRequestor
 
   @SuppressWarnings({ "unchecked" })
   protected synchronized void handleEvent(ContainerAllocatorEvent event) {
+	 
     recalculateReduceSchedule = true;
     if (event.getType() == ContainerAllocator.EventType.CONTAINER_REQ) {
       ContainerRequestEvent reqEvent = (ContainerRequestEvent) event;
       JobId jobId = getJob().getID();
       Resource supportedMaxContainerCapability = getMaxContainerCapability();
+      //这是一个map任务的资源分配请求
       if (reqEvent.getAttemptID().getTaskId().getTaskType().equals(TaskType.MAP)) {
         if (mapResourceRequest.equals(Resources.none())) {
           mapResourceRequest = reqEvent.getCapability();
@@ -354,7 +359,7 @@ public class RMContainerAllocator extends RMContainerRequestor
           if (mapResourceRequest.getMemory() > supportedMaxContainerCapability
             .getMemory()
               || mapResourceRequest.getVirtualCores() > supportedMaxContainerCapability
-                .getVirtualCores()) {
+                .getVirtualCores()) {//请求资源不可以大于applicationmaster注册时候的最大资源
             String diagMsg =
                 "MAP capability required is more than the supported "
                     + "max container capability in the cluster. Killing the Job. mapResourceRequest: "
@@ -369,8 +374,8 @@ public class RMContainerAllocator extends RMContainerRequestor
         reqEvent.getCapability().setMemory(mapResourceRequest.getMemory());
         reqEvent.getCapability().setVirtualCores(
           mapResourceRequest.getVirtualCores());
-        scheduledRequests.addMap(reqEvent);//maps are immediately scheduled
-      } else {
+        scheduledRequests.addMap(reqEvent);//添加等待调度的map任务， maps are immediately scheduled 
+      } else {//这是一个reduce任务的资源调度请求
         if (reduceResourceRequest.equals(Resources.none())) {
           reduceResourceRequest = reqEvent.getCapability();
           eventHandler.handle(new JobHistoryEvent(jobId,
@@ -397,7 +402,7 @@ public class RMContainerAllocator extends RMContainerRequestor
         reqEvent.getCapability().setMemory(reduceResourceRequest.getMemory());
         reqEvent.getCapability().setVirtualCores(
           reduceResourceRequest.getVirtualCores());
-        if (reqEvent.getEarlierAttemptFailed()) {
+        if (reqEvent.getEarlierAttemptFailed()) { //如果这个任务是一个早期失败的任务，则把这个任务放到队列头，以便最快地被重新执行以便恢复
           //add to the front of queue for fail fast
           pendingReduces.addFirst(new ContainerRequest(reqEvent, PRIORITY_REDUCE));
         } else {
@@ -694,11 +699,16 @@ public class RMContainerAllocator extends RMContainerRequestor
   }
   
   @SuppressWarnings("unchecked")
+  /**
+   * 向ResourceManager 发送心跳信息，并处理心跳应答
+   * @return 
+   * @throws Exception
+   */
   private List<Container> getResources() throws Exception {
     applyConcurrentTaskLimits();
 
     // will be null the first time
-    Resource headRoom = Resources.clone(getAvailableResources());
+    Resource headRoom = Resources.clone(getAvailableResources()); //记录当前系统可用资源
     AllocateResponse response;
     /*
      * If contact with RM is lost, the AM will wait MR_AM_TO_RM_WAIT_INTERVAL_MS
@@ -739,8 +749,8 @@ public class RMContainerAllocator extends RMContainerRequestor
       // continue to attempt to contact the RM.
       throw e;
     }
-    Resource newHeadRoom = getAvailableResources();
-    List<Container> newContainers = response.getAllocatedContainers();
+    Resource newHeadRoom = getAvailableResources();//获取最新的container可用资源信息
+    List<Container> newContainers = response.getAllocatedContainers();// 获取当前最新的已分配的container信息
     // Setting NMTokens
     if (response.getNMTokens() != null) {
       for (NMToken nmToken : response.getNMTokens()) {
@@ -754,7 +764,7 @@ public class RMContainerAllocator extends RMContainerRequestor
       updateAMRMToken(response.getAMRMToken());
     }
 
-    List<ContainerStatus> finishedContainers = response.getCompletedContainersStatuses();
+    List<ContainerStatus> finishedContainers = response.getCompletedContainersStatuses();//// 获取当前已经运行完成的container信息
     if (newContainers.size() + finishedContainers.size() > 0
         || !headRoom.equals(newHeadRoom)) {
       //something changed
@@ -962,6 +972,10 @@ public class RMContainerAllocator extends RMContainerRequestor
       return null;
     }
     
+    /**
+     * 添加一个map资源请求
+     * @param event
+     */
     void addMap(ContainerRequestEvent event) {
       ContainerRequest request = null;
       
@@ -998,13 +1012,20 @@ public class RMContainerAllocator extends RMContainerRequestor
       addContainerReq(request);
     }
     
-    
+    /**
+     * 添加一个reduce资源请求
+     * @param req
+     */
     void addReduce(ContainerRequest req) {
       reduces.put(req.attemptID, req);
       addContainerReq(req);
     }
     
     // this method will change the list of allocatedContainers.
+    /**
+     * 这个方法用来将RM返回的container分配给指定的任务
+     * @param allocatedContainers
+     */
     private void assign(List<Container> allocatedContainers) {
       Iterator<Container> it = allocatedContainers.iterator();
       LOG.info("Got allocated containers " + allocatedContainers.size());
@@ -1024,7 +1045,7 @@ public class RMContainerAllocator extends RMContainerRequestor
         Priority priority = allocated.getPriority();
         Resource allocatedResource = allocated.getResource();
         if (PRIORITY_FAST_FAIL_MAP.equals(priority) 
-            || PRIORITY_MAP.equals(priority)) {
+            || PRIORITY_MAP.equals(priority)) { //如果这个container是用来运行map或者上一次失败的map的
           if (ResourceCalculatorUtils.computeAvailableContainers(allocatedResource,
               mapResourceRequest, getSchedulerResourceTypes()) <= 0
               || maps.isEmpty()) {
@@ -1053,7 +1074,7 @@ public class RMContainerAllocator extends RMContainerRequestor
           isAssignable = false;
         }
         
-        if(!isAssignable) {
+        if(!isAssignable) { //如果RM返回给我们的container因为资源不足、或者container信息不合法导致这个container没有被分派，则立刻释放
           // release container if we could not assign it 
           containerNotAssigned(allocated);
           it.remove();
@@ -1160,11 +1181,14 @@ public class RMContainerAllocator extends RMContainerRequestor
         Container allocated = it.next();
         ContainerRequest assigned = assignWithoutLocality(allocated);
         if (assigned != null) {
-          containerAssigned(allocated, assigned);
+          containerAssigned(allocated, assigned);//尝试将container分配给failed-map或者reduce
           it.remove();
         }
       }
 
+      /**
+       *  如果有剩余的未分配container,则分配给map任务
+       */
       assignMapsWithLocality(allocatedContainers);
     }
     

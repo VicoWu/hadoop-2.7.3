@@ -513,7 +513,7 @@ public abstract class Server {
     private long timestamp;               // time received when response is null
                                           // time served when response is not null
     private ByteBuffer rpcResponse;       // the response for this call
-    private final RPC.RpcKind rpcKind;
+    private final RPC.RpcKind rpcKind; //标记了RPC请求的序列化方式，比如writableRPC 或者  protobufRPC
     private final byte[] clientId;
     private final Span traceSpan; // the tracing span on the server side
 
@@ -577,6 +577,7 @@ public abstract class Server {
       acceptChannel.configureBlocking(false);
 
       // Bind the server socket to the local host and port
+      //将channel绑定到固定到ip和端口号
       bind(acceptChannel.socket(), address, backlogLength, conf, portRangeConfig);
       port = acceptChannel.socket().getLocalPort(); //Could be an ephemeral port
       // create a selector;
@@ -590,6 +591,7 @@ public abstract class Server {
       }
 
       // Register accepts on the server socket with the selector.
+      //在当前这个server socke上的selector注册accept事件
       acceptChannel.register(selector, SelectionKey.OP_ACCEPT);
       this.setName("IPC Server listener on " + port);
       this.setDaemon(true);
@@ -677,6 +679,9 @@ public abstract class Server {
       }
     }
 
+    /**
+     * Listener线程，单线程
+     */
     @Override
     public void run() {
       LOG.info(Thread.currentThread().getName() + ": starting");
@@ -692,8 +697,8 @@ public abstract class Server {
             iter.remove();
             try {
               if (key.isValid()) {
-                if (key.isAcceptable())
-                  doAccept(key);
+                if (key.isAcceptable())  //一个新的socket连接请求是否被接受
+                  doAccept(key);//执行ACCEPT对应的处理逻辑
               }
             } catch (IOException e) {
             }
@@ -742,6 +747,13 @@ public abstract class Server {
       return (InetSocketAddress)acceptChannel.socket().getLocalSocketAddress();
     }
     
+    /**
+     * 执行接受新的socke的连接请求的逻辑
+     * @param key
+     * @throws InterruptedException
+     * @throws IOException
+     * @throws OutOfMemoryError
+     */
     void doAccept(SelectionKey key) throws InterruptedException, IOException,  OutOfMemoryError {
       ServerSocketChannel server = (ServerSocketChannel) key.channel();
       SocketChannel channel;
@@ -751,7 +763,7 @@ public abstract class Server {
         channel.socket().setTcpNoDelay(tcpNoDelay);
         channel.socket().setKeepAlive(true);
         
-        Reader reader = getReader();
+        Reader reader = getReader(); //采用轮询方式在众多的reader中取出一个reader进行处理
         Connection c = connectionManager.register(channel);
         // If the connectionManager can't take it, close the connection.
         if (c == null) {
@@ -761,6 +773,7 @@ public abstract class Server {
           continue;
         }
         key.attach(c);  // so closeCurrentConnection can get the object
+        //将当前的connection添加给reader的connection队列，reader将会依次从队列中取出连接进行处理
         reader.addConnection(c);
       }
     }
@@ -1476,6 +1489,13 @@ public abstract class Server {
       }
     }
 
+    /**
+     * 处理当前的连接请求
+     * @return
+     * @throws WrappedRpcServerException
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public int readAndProcess()
         throws WrappedRpcServerException, IOException, InterruptedException {
       while (true) {
@@ -1489,7 +1509,7 @@ public abstract class Server {
             return count;
         }
         
-        if (!connectionHeaderRead) {
+        if (!connectionHeaderRead) { //如果还没有读到连接的header信息
           //Every connection is expected to send the header.
           if (connectionHeaderBuf == null) {
             connectionHeaderBuf = ByteBuffer.allocate(3);
@@ -1872,10 +1892,12 @@ public abstract class Server {
         traceSpan = Trace.startSpan(rpcRequest.toString(), parentSpan).detach();
       }
 
+      //根据请求创建对应的Call对象
       Call call = new Call(header.getCallId(), header.getRetryCount(),
           rpcRequest, this, ProtoUtil.convert(header.getRpcKind()),
           header.getClientId().toByteArray(), traceSpan);
 
+      //将Call对象放入callQueue中，Handler线程将负责从callQueue中逐一取出请求并处理
       callQueue.put(call);              // queue the call; maybe blocked here
       incRpcCount();  // Increment the rpc count
     }
@@ -2005,6 +2027,12 @@ public abstract class Server {
   }
 
   /** Handles queued calls . */
+  /**
+   * handler祝线程，用来从callQueue中取出Call对象，执行对应的函数调用，
+   * 然后将结果返回给客户端，结果返回的任务交给单独的Responder线程进行处理
+   * @author wuchang
+   *
+   */
   private class Handler extends Thread {
     public Handler(int instanceNumber) {
       this.setDaemon(true);
@@ -2117,7 +2145,7 @@ public abstract class Server {
                   StringUtils.stringifyException(e));
             }
           }
-        } catch (Exception e) {
+        } catch (Exception e) { 
           LOG.info(Thread.currentThread().getName() + " caught an exception", e);
           if (Trace.isTracing()) {
             traceScope.getSpan().addTimelineAnnotation("Exception: " +

@@ -32,13 +32,20 @@ public class ResourceCalculatorUtils {
     return (a + (b - 1)) / b;
   }
 
+  /**
+   * 
+   * @param available ResourceManager返回的container的资源
+   * @param required 向ResourceManager请求的资源
+   * @param resourceTypes 资源类型
+   * @return 1 资源够用 0 资源不够用
+   */
   public static int computeAvailableContainers(Resource available,
       Resource required, EnumSet<SchedulerResourceTypes> resourceTypes) {
-    if (resourceTypes.contains(SchedulerResourceTypes.CPU)) {
+    if (resourceTypes.contains(SchedulerResourceTypes.CPU)) { //如果资源类型包含cpu资源
       return Math.min(available.getMemory() / required.getMemory(),
-        available.getVirtualCores() / required.getVirtualCores());
+        available.getVirtualCores() / required.getVirtualCores());//当且仅当可用的内存大于需要的内存，并且可用的核数大于需要的核数
     }
-    return available.getMemory() / required.getMemory();
+    return available.getMemory() / required.getMemory(); //可用的内存是否大于需要的内存
   }
 
   public static int divideAndCeilContainers(Resource required, Resource factor,

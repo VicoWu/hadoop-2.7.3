@@ -41,6 +41,8 @@ import com.google.common.annotations.VisibleForTesting;
  * Dispatches {@link Event}s in a separate thread. Currently only single thread
  * does that. Potentially there could be multiple channels for each event type
  * class and a thread pool can be used to dispatch the events.
+ * 事件的中央异步调度器，负责请求到达之后的的第一次调度，这次调度可能把请求分发给某个eventHandler,
+ * 这个eventHandler可能把请求转发给另外一个EventHandler,或者转发给一个事件处理器(有穷状态机)
  */
 @SuppressWarnings("rawtypes")
 @Public
@@ -49,7 +51,7 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   private static final Log LOG = LogFactory.getLog(AsyncDispatcher.class);
 
-  private final BlockingQueue<Event> eventQueue;
+  private final BlockingQueue<Event> eventQueue;//事件队列
   private volatile int lastEventQueueSizeLogged = 0;
   private volatile boolean stopped = false;
 
@@ -59,16 +61,16 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   // Indicates all the remaining dispatcher's events on stop have been drained
   // and processed.
-  private volatile boolean drained = true;
+  private volatile boolean drained = true; //系统初始化的时候，没有事件，自然所有事件都是处理干净的
   private Object waitForDrained = new Object();
 
   // For drainEventsOnStop enabled only, block newly coming events into the
   // queue while stopping.
-  private volatile boolean blockNewEvents = false;
+  private volatile boolean blockNewEvents = false; //服务停止时，先把标记为置位，阻止新的事件到来
   private final EventHandler handlerInstance = new GenericEventHandler();
 
   private Thread eventHandlingThread;
-  protected final Map<Class<? extends Enum>, EventHandler> eventDispatchers;
+  protected final Map<Class<? extends Enum>, EventHandler> eventDispatchers; //根据eventtype获取对应的dispatcher
   private boolean exitOnDispatchException;
 
   public AsyncDispatcher() {
@@ -138,7 +140,7 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
   @Override
   protected void serviceStop() throws Exception {
     if (drainEventsOnStop) {
-      blockNewEvents = true;
+      blockNewEvents = true; //首先阻止新任务的分派，试图优雅停掉当前线程的工作
       LOG.info("AsyncDispatcher is draining to stop, igonring any new events.");
       long endTime = System.currentTimeMillis() + getConfig()
           .getLong(YarnConfiguration.DISPATCHER_DRAIN_EVENTS_TIMEOUT,
@@ -156,9 +158,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
     }
     stopped = true;
     if (eventHandlingThread != null) {
-      eventHandlingThread.interrupt();
+      eventHandlingThread.interrupt();//防止线程正在处理一个耗时任务导致线程依然没有退出
       try {
-        eventHandlingThread.join();
+        eventHandlingThread.join();//等待eventHandlingThread执行完毕
       } catch (InterruptedException ie) {
         LOG.warn("Interrupted Exception while stopping", ie);
       }
@@ -201,6 +203,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   @SuppressWarnings("unchecked")
   @Override
+  /**
+   * 注册事件分派器
+   */
   public void register(Class<? extends Enum> eventType,
       EventHandler handler) {
     /* check to see if we have a listener registered */
@@ -230,11 +235,10 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   class GenericEventHandler implements EventHandler<Event> {
     public void handle(Event event) {
-      if (blockNewEvents) {
+      if (blockNewEvents) { //如果该标记为置位，说明可能服务正在进行stop操作，无法处理新的请求
         return;
       }
       drained = false;
-
       /* all this method does is enqueue all the events onto the queue */
       int qSize = eventQueue.size();
       if (qSize != 0 && qSize % 1000 == 0

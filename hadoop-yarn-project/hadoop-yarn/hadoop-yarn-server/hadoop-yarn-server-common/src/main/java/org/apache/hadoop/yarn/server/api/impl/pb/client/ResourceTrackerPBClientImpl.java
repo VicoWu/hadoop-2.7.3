@@ -67,6 +67,7 @@ private ResourceTrackerPB proxy;
       IOException {
     RegisterNodeManagerRequestProto requestProto = ((RegisterNodeManagerRequestPBImpl)request).getProto();
     try {
+    
       return new RegisterNodeManagerResponsePBImpl(proxy.registerNodeManager(null, requestProto));
     } catch (ServiceException e) {
       RPCUtil.unwrapAndThrowException(e);

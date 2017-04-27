@@ -141,6 +141,9 @@ public abstract class RMCommunicator extends AbstractService
     return this.job.getProgress();
   }
 
+  /**
+   * 向 ResourceManager注册  ApplicationMaster
+   */
   protected void register() {
     //Register
     InetSocketAddress serviceAddr = null;
@@ -160,7 +163,7 @@ public abstract class RMCommunicator extends AbstractService
       RegisterApplicationMasterResponse response =
         scheduler.registerApplicationMaster(request);
       isApplicationMasterRegistered = true;
-      maxContainerCapability = response.getMaximumResourceCapability();
+      maxContainerCapability = response.getMaximumResourceCapability();//最大允许资源量
       this.context.getClusterInfo().setMaxContainerCapability(
           maxContainerCapability);
       if (UserGroupInformation.isSecurityEnabled()) {
@@ -168,7 +171,7 @@ public abstract class RMCommunicator extends AbstractService
       }
       this.applicationACLs = response.getApplicationACLs();
       LOG.info("maxContainerCapability: " + maxContainerCapability);
-      String queue = response.getQueue();
+      String queue = response.getQueue();//从注册信息中获取队列信息
       LOG.info("queue: " + queue);
       job.setQueueName(queue);
       this.schedulerResourceTypes.addAll(response.getSchedulerResourceTypes());

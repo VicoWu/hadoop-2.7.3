@@ -243,6 +243,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
     addIfService(rmDispatcher);
     rmContext.setDispatcher(rmDispatcher);
 
+    //为管理员提供的一套独立接口，管理员通过这套接口管理集群，比如动态更新节点列表、更新acl、更新队列信息
     adminService = createAdminService();
     addService(adminService);
     rmContext.setRMAdminService(adminService);
@@ -419,14 +420,17 @@ public class ResourceManager extends CompositeService implements Recoverable {
       rmSecretManagerService = createRMSecretManagerService();
       addService(rmSecretManagerService);
 
+      //用于检测一个container是否应该被回收，如果一个container分配给一个Node, 而resourceManager却发现该container长期没有运行，则回收它
       containerAllocationExpirer = new ContainerAllocationExpirer(rmDispatcher);
       addService(containerAllocationExpirer);
       rmContext.setContainerAllocationExpirer(containerAllocationExpirer);
 
-      AMLivelinessMonitor amLivelinessMonitor = createAMLivelinessMonitor();
+      //ApplicationMaster存活状态监控，如果ApplicationMaster长时间没有向自己发送状态信息，则会杀死然后在其它机器傻姑娘重启
+      AMLivelinessMonitor amLivelinessMonitor = createAMLivelinessMonitor(); //负责监控ApplicationMaster是否存活
       addService(amLivelinessMonitor);
       rmContext.setAMLivelinessMonitor(amLivelinessMonitor);
 
+      //ApplicationMaster完成状态监控
       AMLivelinessMonitor amFinishingMonitor = createAMLivelinessMonitor();
       addService(amFinishingMonitor);
       rmContext.setAMFinishingMonitor(amFinishingMonitor);
@@ -473,17 +477,20 @@ public class ResourceManager extends CompositeService implements Recoverable {
       }
 
       // Register event handler for NodesListManager
+      //维护正常节点和异常节点的列表，管理白名单和黑名单节点
       nodesListManager = new NodesListManager(rmContext);
       rmDispatcher.register(NodesListManagerEventType.class, nodesListManager);
       addService(nodesListManager);
       rmContext.setNodesListManager(nodesListManager);
 
       // Initialize the scheduler
+      //资源分配模块，负责按照一定规则，将队列资源分配给各个应用程序，默认CapacityScheduler
       scheduler = createScheduler();
       scheduler.setRMContext(rmContext);
       addIfService(scheduler);
       rmContext.setScheduler(scheduler);
 
+      //RMActiveServices的时间调度器AsyncScheduler
       schedulerDispatcher = createSchedulerEventDispatcher();
       addIfService(schedulerDispatcher);
       rmDispatcher.register(SchedulerEventType.class, schedulerDispatcher);
@@ -500,9 +507,11 @@ public class ResourceManager extends CompositeService implements Recoverable {
       rmDispatcher.register(
           RMNodeEventType.class, new NodeEventDispatcher(rmContext));
 
+      //监控namemode的存活状态
       nmLivelinessMonitor = createNMLivelinessMonitor();
       addService(nmLivelinessMonitor);
 
+      //创建
       resourceTracker = createResourceTrackerService();
       addService(resourceTracker);
       rmContext.setResourceTrackerService(resourceTracker);
@@ -529,8 +538,10 @@ public class ResourceManager extends CompositeService implements Recoverable {
       addService(masterService) ;
       rmContext.setApplicationMasterService(masterService);
 
+      //应用权限管理器，包括了两种权限，查看权限和修改权限。
       applicationACLsManager = new ApplicationACLsManager(conf);
 
+      //队列权限管理器，
       queueACLsManager = createQueueACLsManager(scheduler, conf);
 
       rmAppManager = createRMAppManager();
@@ -541,6 +552,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
       addService(clientRM);
       rmContext.setClientRMService(clientRM);
 
+      //ApplicationMaster的启动器，负责管理并启动所有的ApplicationMaster,负责与某个nodemanager通信，让其启动ApplicationMaster
       applicationMasterLauncher = createAMLauncher();
       rmDispatcher.register(AMLauncherEventType.class,
           applicationMasterLauncher);

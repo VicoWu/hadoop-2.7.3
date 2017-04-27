@@ -20,6 +20,10 @@ package org.apache.hadoop.yarn.server.api;
 import org.apache.hadoop.ipc.ProtocolInfo;
 import org.apache.hadoop.yarn.proto.ResourceTracker.ResourceTrackerService;
 
+/**
+ * 阻塞式protobuf 远程调用
+ * @author wuchang
+ */
 @ProtocolInfo(
     protocolName = "org.apache.hadoop.yarn.server.api.ResourceTrackerPB",
     protocolVersion = 1)

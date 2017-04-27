@@ -341,7 +341,7 @@ public class MRAppMaster extends CompositeService {
       
       NoopEventHandler eater = new NoopEventHandler();
       //We do not have a JobEventDispatcher in this path
-      dispatcher.register(JobEventType.class, eater);
+      dispatcher.register(JobEventType.class, eater); //注册事件处理类
 
       EventHandler<JobHistoryEvent> historyService = null;
       if (copyHistory) {
@@ -459,7 +459,7 @@ public class MRAppMaster extends CompositeService {
   } // end of init()
   
   protected Dispatcher createDispatcher() {
-    return new AsyncDispatcher();
+    return new AsyncDispatcher(); //创建一个异步分派调度器
   }
 
   private boolean isCommitJobRepeatable() throws IOException {
@@ -876,13 +876,18 @@ public class MRAppMaster extends CompositeService {
         this.containerAllocator = new RMContainerAllocator(
             this.clientService, this.context);
       }
-      ((Service)this.containerAllocator).init(getConfig());
+    
+       ((Service)this.containerAllocator).init(getConfig()); 
+       
+       //在这里，向ResourceManager发送applicationmaster的注册请求
+       //即调用RMCommunicator.serviceStart() -> register()方法完成注册。
       ((Service)this.containerAllocator).start();
       super.serviceStart();
     }
 
     @Override
     protected void serviceStop() throws Exception {
+     
       ServiceOperations.stop((Service) this.containerAllocator);
       super.serviceStop();
     }
@@ -927,12 +932,13 @@ public class MRAppMaster extends CompositeService {
 
     @Override
     protected void serviceStart() throws Exception {
-      if (job.isUber()) {
+      if (job.isUber()) { //如果是uber模式，则使用LocalContainerLauncher
         this.containerLauncher = new LocalContainerLauncher(context,
             (TaskUmbilicalProtocol) taskAttemptListener);
         ((LocalContainerLauncher) this.containerLauncher)
                 .setEncryptedSpillKey(encryptedSpillKey);
       } else {
+    	  //否则，使用ContainerLauncherImpl
         this.containerLauncher = new ContainerLauncherImpl(context);
       }
       ((Service)this.containerLauncher).init(getConfig());
@@ -1084,6 +1090,7 @@ public class MRAppMaster extends CompositeService {
             nmPort, nmHttpPort);
 
     // /////////////////// Create the job itself.
+    //实际上是一个JobImpl
     job = createJob(getConfig(), forcedState, shutDownMessage);
 
     // End of creating the job.

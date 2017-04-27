@@ -66,7 +66,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeStartedEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeStatusEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.security.NMTokenSecretManagerInRM;
 import org.apache.hadoop.yarn.server.resourcemanager.security.RMContainerTokenSecretManager;
-import org.apache.hadoop.yarn.server.resourcemanager.security.authorize.RMPolicyProvider;
+import org.apache.hadoop.yarn.server.resourcemanager.security.authorizResourceTrackerServicee.RMPolicyProvider;
 import org.apache.hadoop.yarn.server.utils.YarnServerBuilderUtils;
 import org.apache.hadoop.yarn.util.RackResolver;
 import org.apache.hadoop.yarn.util.YarnVersionInfo;
@@ -276,6 +276,7 @@ public class ResourceTrackerService extends AbstractService implements
       }
     }
 
+    //服务端判断请求是否来自一个合法的nodemanager
     // Check if this node is a 'valid' node
     if (!this.nodesListManager.isValidNode(host)) {
       String message =
@@ -287,6 +288,7 @@ public class ResourceTrackerService extends AbstractService implements
       return response;
     }
 
+    //服务端判断请求的资源是否小于最小配置资源
     // Check if this node has minimum allocations
     if (capability.getMemory() < minAllocMb
         || capability.getVirtualCores() < minAllocVcores) {

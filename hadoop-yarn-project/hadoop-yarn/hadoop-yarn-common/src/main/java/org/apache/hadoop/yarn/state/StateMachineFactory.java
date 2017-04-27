@@ -47,12 +47,12 @@ final public class StateMachineFactory
              <OPERAND, STATE extends Enum<STATE>,
               EVENTTYPE extends Enum<EVENTTYPE>, EVENT> {
 
-  private final TransitionsListNode transitionsListNode;
+  private final TransitionsListNode transitionsListNode;//记录了这个StateMachine定义的所有transition
 
   private Map<STATE, Map<EVENTTYPE,
     Transition<OPERAND, STATE, EVENTTYPE, EVENT>>> stateMachineTable;
 
-  private STATE defaultInitialState;
+  private STATE defaultInitialState;//默认初始化的状态
 
   private final boolean optimized;
 
@@ -60,6 +60,7 @@ final public class StateMachineFactory
    * Constructor
    *
    * This is the only constructor in the API.
+   * 建立一个StateMachineFactory，并定义初始化状态
    *
    */
   public StateMachineFactory(STATE defaultInitialState) {
@@ -106,7 +107,7 @@ final public class StateMachineFactory
         (ApplicableTransition<OPERAND, STATE, EVENTTYPE, EVENT> transition,
         TransitionsListNode next) {
       this.transition = transition;
-      this.next = next;
+      this.next = next; //形成链表
     }
   }
 
@@ -343,6 +344,11 @@ final public class StateMachineFactory
                        EVENT event, EVENTTYPE eventType);
   }
 
+  /**
+   * 一个初始状态、一个最终状态和一个事件
+   * @author wuchang
+   *
+   */
   private class SingleInternalArc
                     implements Transition<OPERAND, STATE, EVENTTYPE, EVENT> {
 
@@ -365,6 +371,11 @@ final public class StateMachineFactory
     }
   }
 
+  /**
+   * 一个初始状态、多个最终状态，一种事件
+   * hook返回的最终状态必须是预定义的validPostStates中的一个
+   * @author wuchang
+   */
   private class MultipleInternalArc
               implements Transition<OPERAND, STATE, EVENTTYPE, EVENT>{
 
@@ -384,7 +395,7 @@ final public class StateMachineFactory
         throws InvalidStateTransitonException {
       STATE postState = hook.transition(operand, event);
 
-      if (!validPostStates.contains(postState)) {
+      if (!validPostStates.contains(postState)) {//hook返回的最终状态必须是validPostStates中的一个
         throw new InvalidStateTransitonException(oldState, eventType);
       }
       return postState;
