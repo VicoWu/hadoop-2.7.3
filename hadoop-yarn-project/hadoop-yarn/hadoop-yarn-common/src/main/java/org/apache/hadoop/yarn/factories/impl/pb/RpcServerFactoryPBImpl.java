@@ -94,6 +94,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
             + getPbServiceImplClassName(protocol) + "]", e);
       }
       try {
+    	// ResourceTrackerPBServiceImpl单一参数的构造函数
         constructor = pbServiceImplClazz.getConstructor(protocol);
         constructor.setAccessible(true);
         serviceCache.putIfAbsent(protocol, constructor);
@@ -106,7 +107,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     
     Object service = null;
     try {
-    	//ResourceTrackerPBServiceImpl
+    	//instance:ResourceTrackerService
       service = constructor.newInstance(instance);
     } catch (InvocationTargetException e) {
       throw new YarnRuntimeException(e);
@@ -116,6 +117,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
       throw new YarnRuntimeException(e);
     }
 
+    //pbProtocol:ResourceTrackerPB
     Class<?> pbProtocol = service.getClass().getInterfaces()[0];
     Method method = protoCache.get(protocol);
     if (method == null) {

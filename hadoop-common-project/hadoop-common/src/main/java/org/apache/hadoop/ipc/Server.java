@@ -591,7 +591,7 @@ public abstract class Server {
       }
 
       // Register accepts on the server socket with the selector.
-      //在当前这个server socke上的selector注册accept事件
+      //在当前这个server socket上的selector注册accept事件
       acceptChannel.register(selector, SelectionKey.OP_ACCEPT);
       this.setName("IPC Server listener on " + port);
       this.setDaemon(true);
@@ -1185,7 +1185,7 @@ public abstract class Server {
       this.channel = channel;
       this.lastContact = lastContact;
       this.data = null;
-      this.dataLengthBuffer = ByteBuffer.allocate(4);
+      this.dataLengthBuffer = ByteBuffer.allocate(4); //正常情况下，rpc请求的请求头应该是RpcConstants.HEADER
       this.unwrappedData = null;
       this.unwrappedDataLengthBuffer = ByteBuffer.allocate(4);
       this.socket = channel.socket();
@@ -1504,9 +1504,13 @@ public abstract class Server {
          */    
         int count = -1;
         if (dataLengthBuffer.remaining() > 0) {
-          count = channelRead(channel, dataLengthBuffer);       
+          count = channelRead(channel, dataLengthBuffer);    
+        /**
+         * 正常情况下dataLengthBuffer.reamaining()应该刚好为0，也就是读取到的刚好是四个字节的head RpcConstant.HEADER()
+         * 如果count < 0 || dataLengthBuffer.remaining() > 0，则已经出现异常，直接返回
+         */
           if (count < 0 || dataLengthBuffer.remaining() > 0) 
-            return count;
+            return count; 
         }
         
         if (!connectionHeaderRead) { //如果还没有读到连接的header信息
@@ -1516,7 +1520,7 @@ public abstract class Server {
           }
           count = channelRead(channel, connectionHeaderBuf);
           if (count < 0 || connectionHeaderBuf.remaining() > 0) {
-            return count;
+            return count;//如果ByteBuffer还有剩余，说明读取完毕，直接返回，否则，继续循环
           }
           int version = connectionHeaderBuf.get(0);
           // TODO we should add handler for service class later
@@ -1526,11 +1530,13 @@ public abstract class Server {
           // Check if it looks like the user is hitting an IPC port
           // with an HTTP GET - this is a common error, so we can
           // send back a simple string indicating as much.
+          //检测用户错误地往这个ipd地址上发送了一个get请求
           if (HTTP_GET_BYTES.equals(dataLengthBuffer)) {
             setupHttpRequestOnIpcPortResponse();
             return -1;
           }
           
+          //一个合法的RPC请求的请求头应该是hrpc，VERSION= 9
           if (!RpcConstants.HEADER.equals(dataLengthBuffer)
               || version != CURRENT_VERSION) {
             //Warning is ok since this is not supposed to happen.
@@ -1545,17 +1551,17 @@ public abstract class Server {
           // this may switch us into SIMPLE
           authProtocol = initializeAuthContext(connectionHeaderBuf.get(2));          
           
-          dataLengthBuffer.clear();
+          dataLengthBuffer.clear(); //clear方法并不清除数据，而是将position 设置为0，capacity和limit都设置为capacity 
           connectionHeaderBuf = null;
           connectionHeaderRead = true;
-          continue;
+          continue;//如果当前读取到的是header，则继续while循环，读取到的应该是数据长度字段
         }
         
         if (data == null) {
           dataLengthBuffer.flip();
           dataLength = dataLengthBuffer.getInt();
           checkDataLength(dataLength);
-          data = ByteBuffer.allocate(dataLength);
+          data = ByteBuffer.allocate(dataLength);//根据数据长度初始化data
         }
         
         count = channelRead(channel, data);

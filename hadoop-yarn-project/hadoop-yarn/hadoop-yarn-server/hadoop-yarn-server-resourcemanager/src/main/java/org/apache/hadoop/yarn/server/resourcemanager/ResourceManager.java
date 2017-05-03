@@ -496,14 +496,17 @@ public class ResourceManager extends CompositeService implements Recoverable {
       rmDispatcher.register(SchedulerEventType.class, schedulerDispatcher);
 
       // Register event handler for RmAppEvents
+      //将RmAppEvents交给RMApp状态机去维护，其实现类是RMAppImpl
       rmDispatcher.register(RMAppEventType.class,
           new ApplicationEventDispatcher(rmContext));
 
       // Register event handler for RmAppAttemptEvents
+      //将RmAppAttemptEvents交给RMAppAttempt去维护，其实现类是RMAppAttemptImpl
       rmDispatcher.register(RMAppAttemptEventType.class,
           new ApplicationAttemptEventDispatcher(rmContext));
 
       // Register event handler for RmNodes
+      //将RmNodesEvent交给RMNode去维护，其实现类是RMNodeImpl
       rmDispatcher.register(
           RMNodeEventType.class, new NodeEventDispatcher(rmContext));
 
@@ -511,7 +514,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
       nmLivelinessMonitor = createNMLivelinessMonitor();
       addService(nmLivelinessMonitor);
 
-      //创建
+      //创建resourceTracker服务，负责与NodeManager进行通信
       resourceTracker = createResourceTrackerService();
       addService(resourceTracker);
       rmContext.setResourceTrackerService(resourceTracker);
@@ -548,6 +551,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
       // Register event handler for RMAppManagerEvents
       rmDispatcher.register(RMAppManagerEventType.class, rmAppManager);
 
+      //为普通用户提供服务，用来处理客户端的各种请求，比如提交应用、终止应用、获取应用的运行状态
       clientRM = createClientRMService();
       addService(clientRM);
       rmContext.setClientRMService(clientRM);

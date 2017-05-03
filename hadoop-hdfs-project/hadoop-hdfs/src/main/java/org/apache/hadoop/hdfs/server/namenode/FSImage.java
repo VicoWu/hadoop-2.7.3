@@ -797,7 +797,8 @@ public class FSImage implements Closeable {
   }
 
   /**
-   * @param imageFile the image file that was loaded
+   * @param imageFile the image file that was loaded  18312215 19:36:20 18321614 9399
+   * 19914142
    * @param numEditsLoaded the number of edits loaded from edits logs
    * @return true if the NameNode should automatically save the namespace
    * when it is started, due to the latest checkpoint being too old.

@@ -887,6 +887,7 @@ public class RPC {
      }
 
 
+     //以协议名称和版本号作为key，协议具体实现作为value，存入到protocolImplMapArray中
      getProtocolImplMap(rpcKind).put(new ProtoNameVer(protocolName, version),
          new ProtoClassProtoImpl(protocolClass, protocolImpl)); 
      LOG.debug("RpcKind = " + rpcKind + " Protocol Name = " + protocolName +  " version=" + version +
