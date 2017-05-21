@@ -166,8 +166,8 @@ public class RMContainerAllocator extends RMContainerRequestor
   private long reducerNoHeadroomPreemptionDelayMs = 0;
 
   private float reduceSlowStart = 0;
-  private int maxRunningMaps = 0;
-  private int maxRunningReduces = 0;
+  private int maxRunningMaps = 0;//单个job最大并行运行的map数量
+  private int maxRunningReduces = 0;//单个job最大并行运行的reduce数量
   private long retryInterval;
   private long retrystartTime;
   private Clock clock;
@@ -256,7 +256,7 @@ public class RMContainerAllocator extends RMContainerRequestor
    */
   protected synchronized void heartbeat() throws Exception {
     scheduleStats.updateAndLogIfChanged("Before Scheduling: ");
-    List<Container> allocatedContainers = getResources();//从rm请求资源、container的状态
+    List<Container> allocatedContainers = getResources();//新分配的container资源
     if (allocatedContainers != null && allocatedContainers.size() > 0) {
       scheduledRequests.assign(allocatedContainers); //将收到的container分配给具体任务
     }
@@ -323,6 +323,7 @@ public class RMContainerAllocator extends RMContainerRequestor
 
   @Override
   public void handle(ContainerAllocatorEvent event) {
+	 
     int qSize = eventQueue.size();
     if (qSize != 0 && qSize % 1000 == 0) {
       LOG.info("Size of event-queue in RMContainerAllocator is " + qSize);
@@ -356,6 +357,7 @@ public class RMContainerAllocator extends RMContainerRequestor
               org.apache.hadoop.mapreduce.TaskType.MAP, mapResourceRequest
                 .getMemory())));
           LOG.info("mapResourceRequest:" + mapResourceRequest);
+          //如果请求的资源超过了系统规定的资源申请总量（AM注册的时候RM告知的,则会产生kill job请求）
           if (mapResourceRequest.getMemory() > supportedMaxContainerCapability
             .getMemory()
               || mapResourceRequest.getVirtualCores() > supportedMaxContainerCapability
@@ -700,12 +702,12 @@ public class RMContainerAllocator extends RMContainerRequestor
   
   @SuppressWarnings("unchecked")
   /**
-   * 向ResourceManager 发送心跳信息，并处理心跳应答
-   * @return 
+   * 向ResourceManager 发送心跳信息，主要是讲当前系统的资源分配申请、已经完成运行可以释放的container告知远程的RM
+   * @return 新分配的container
    * @throws Exception
    */
   private List<Container> getResources() throws Exception {
-    applyConcurrentTaskLimits();
+    applyConcurrentTaskLimits();//预先计算能够申请的资源限制
 
     // will be null the first time
     Resource headRoom = Resources.clone(getAvailableResources()); //记录当前系统可用资源
@@ -716,6 +718,7 @@ public class RMContainerAllocator extends RMContainerRequestor
      * to contact the RM.
      */
     try {
+      //向ResouceManager发起请求，并更新本地的可用资源
       response = makeRemoteRequest();
       // Reset retry count if no exception occurred.
       retrystartTime = System.currentTimeMillis();
@@ -750,7 +753,7 @@ public class RMContainerAllocator extends RMContainerRequestor
       throw e;
     }
     Resource newHeadRoom = getAvailableResources();//获取最新的container可用资源信息
-    List<Container> newContainers = response.getAllocatedContainers();// 获取当前最新的已分配的container信息
+    List<Container> newContainers = response.getAllocatedContainers();// 获取当前新分配的container信息
     // Setting NMTokens
     if (response.getNMTokens() != null) {
       for (NMToken nmToken : response.getNMTokens()) {
@@ -764,7 +767,7 @@ public class RMContainerAllocator extends RMContainerRequestor
       updateAMRMToken(response.getAMRMToken());
     }
 
-    List<ContainerStatus> finishedContainers = response.getCompletedContainersStatuses();//// 获取当前已经运行完成的container信息
+    List<ContainerStatus> finishedContainers = response.getCompletedContainersStatuses();//// 获取当前新运行完成的container信息
     if (newContainers.size() + finishedContainers.size() > 0
         || !headRoom.equals(newHeadRoom)) {
       //something changed
@@ -807,28 +810,37 @@ public class RMContainerAllocator extends RMContainerRequestor
     return newContainers;
   }
 
+  /**
+   * 计算可申请资源数量，包括failmap map 和 reduce资源数量
+   */
   private void applyConcurrentTaskLimits() {
     int numScheduledMaps = scheduledRequests.maps.size();
     if (maxRunningMaps > 0 && numScheduledMaps > 0) {
+    //此次能够申请的最大map资源数为配置的单个job最大可运行map数减去已经分配给某个container正在运行的map资源数量
       int maxRequestedMaps = Math.max(0,
           maxRunningMaps - assignedRequests.maps.size());
-      int numScheduledFailMaps = scheduledRequests.earlierFailedMaps.size();
+      int numScheduledFailMaps = scheduledRequests.earlierFailedMaps.size();//最大等待调度的failmap资源数量
       int failedMapRequestLimit = Math.min(maxRequestedMaps,
-          numScheduledFailMaps);
+          numScheduledFailMaps);//可以申请的failmap 的资源数量取剩余可申请资源数量和当前已经存在的failedmap数量中的较小值
       int normalMapRequestLimit = Math.min(
-          maxRequestedMaps - failedMapRequestLimit,
-          numScheduledMaps - numScheduledFailMaps);
+          maxRequestedMaps - failedMapRequestLimit,//当前
+          numScheduledMaps - numScheduledFailMaps);//当前需要等待资源调度的正常map的数量
+      //设置failmap资源的申请限制
       setRequestLimit(PRIORITY_FAST_FAIL_MAP, mapResourceRequest,
           failedMapRequestLimit);
+      //设置正常map资源的申请限制
       setRequestLimit(PRIORITY_MAP, mapResourceRequest, normalMapRequestLimit);
     }
 
     int numScheduledReduces = scheduledRequests.reduces.size();
     if (maxRunningReduces > 0 && numScheduledReduces > 0) {
+       //此次已经申请的最大reduce资源数为配置的单个job最大可运行reduce数减去已经分配给某个container正在运行的reduce资源数量
+
+    //此次能够申请的最大reduce资源数为配置的单个job最大可运行reduce数减去已经分配给某个container正在运行的reduce资源数量
       int maxRequestedReduces = Math.max(0,
-          maxRunningReduces - assignedRequests.reduces.size());
+          maxRunningReduces - assignedRequests.reduces.size());//
       int reduceRequestLimit = Math.min(maxRequestedReduces,
-          numScheduledReduces);
+          numScheduledReduces);//reduce申请的上限，是当前可申请的最大reduc额数目和当前等待调度的reduce数目的较小值
       setRequestLimit(PRIORITY_REDUCE, reduceResourceRequest,
           reduceRequestLimit);
     }
@@ -979,11 +991,12 @@ public class RMContainerAllocator extends RMContainerRequestor
     void addMap(ContainerRequestEvent event) {
       ContainerRequest request = null;
       
+      //如果这个请求是一个fail map请求
       if (event.getEarlierAttemptFailed()) {
         earlierFailedMaps.add(event.getAttemptID());
         request = new ContainerRequest(event, PRIORITY_FAST_FAIL_MAP);
         LOG.info("Added "+event.getAttemptID()+" to list of failed maps");
-      } else {
+      } else {//如果这个请求是一个普通map请求
         for (String host : event.getHosts()) {
           LinkedList<TaskAttemptId> list = mapsHostMapping.get(host);
           if (list == null) {
@@ -1140,6 +1153,9 @@ public class RMContainerAllocator extends RMContainerRequestor
       decContainerReq(assigned);
 
       // send the container-assigned event to task attempt
+      //TaskAttemptContainerAssignedEvent是一个TaskAttemptEventType,通过
+      //MRAppMaster.RunningAppContext.getEventHandler()方法得知，
+      //这个eventType是交付给TaskAttemptEventDispatcher.TaskAttemptEventDispatcher进行处理
       eventHandler.handle(new TaskAttemptContainerAssignedEvent(
           assigned.attemptID, allocated, applicationACLs));
 

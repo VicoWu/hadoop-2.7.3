@@ -131,6 +131,7 @@ public class ApplicationACLsManager {
     }
 
     // Allow application-owner for any type of access on the application
+    //如果用户是ACL管理员或者这个应用的管理员或者这个用户是在这个应用的ACL列表用户中，那么用户被允许对应用applicationAccessType的操作
     if (this.adminAclsManager.isAdmin(callerUGI)
         || user.equals(applicationOwner)
         || applicationACL.isUserAllowed(callerUGI)) {

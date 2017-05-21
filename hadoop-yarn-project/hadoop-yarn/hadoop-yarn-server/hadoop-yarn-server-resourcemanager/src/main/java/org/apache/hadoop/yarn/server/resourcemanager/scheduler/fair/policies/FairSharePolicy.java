@@ -131,6 +131,7 @@ public class FairSharePolicy extends SchedulingPolicy {
     ComputeFairShares.computeShares(schedulables, totalResources, ResourceType.MEMORY);
   }
 
+  //当前的steady fair share
   @Override
   public void computeSteadyShares(Collection<? extends FSQueue> queues,
       Resource totalResources) {

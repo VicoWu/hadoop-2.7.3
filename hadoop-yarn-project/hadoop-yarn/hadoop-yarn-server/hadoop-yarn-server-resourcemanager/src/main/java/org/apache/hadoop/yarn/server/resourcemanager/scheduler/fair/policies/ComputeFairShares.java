@@ -113,6 +113,7 @@ public class ComputeFairShares {
       Resource totalResources, ResourceType type, boolean isSteadyShare) {
 
     Collection<Schedulable> schedulables = new ArrayList<Schedulable>();
+    //所有计算完毕准备取走的resource
     int takenResources = handleFixedFairShares(
         allSchedulables, schedulables, isSteadyShare, type);
 
@@ -122,8 +123,8 @@ public class ComputeFairShares {
     // Find an upper bound on R that we can use in our binary search. We start
     // at R = 1 and double it until we have either used all the resources or we
     // have met all Schedulables' max shares.
-    int totalMaxShare = 0;
-    for (Schedulable sched : schedulables) {
+    int totalMaxShare = 0;//non-fix队列的所有max-share之和
+    for (Schedulable sched : schedulables) {//对于non-fixed队列，计算maxShare之和
       int maxShare = getResourceValue(sched.getMaxShare(), type);
       totalMaxShare = (int) Math.min((long)maxShare + (long)totalMaxShare,
           Integer.MAX_VALUE);
@@ -132,8 +133,10 @@ public class ComputeFairShares {
       }
     }
 
+    //集群总资源，减去 已经计算完毕的fix队列的资源，得到剩下的non-fix的资源总量
     int totalResource = Math.max((getResourceValue(totalResources, type) -
         takenResources), 0);
+    //所有non-fix队列的maxShare加起来小于 totalResource（集群总资源减去fix队列资源量的和的剩余值）,则只需要所有maxShare的和就可以了，否则，需要totalResuorce（集群总资源减去fix队列资源量的和的剩余值）
     totalResource = Math.min(totalMaxShare, totalResource);
 
     double rMax = 1.0;
@@ -141,6 +144,7 @@ public class ComputeFairShares {
         < totalResource) {
       rMax *= 2.0;
     }
+    //获取了一个最大值，可以在0和这个最大值之间进行二分查找了。二分查找结束以后，right 值就几乎逼近了non fix队列的可用资源值
     // Perform the binary search for up to COMPUTE_FAIR_SHARES_ITERATIONS steps
     double left = 0;
     double right = rMax;
@@ -157,13 +161,14 @@ public class ComputeFairShares {
         right = mid;
       }
     }
+    //二分查找完毕，right中存放了正确的R值
     // Set the fair shares based on the value of R we've converged to
     for (Schedulable sched : schedulables) {
-      if (isSteadyShare) {
+      if (isSteadyShare) {//如果是计算steady fair share , 则设置这个steady fair share值
         setResourceValue(computeShare(sched, right, type),
-            ((FSQueue) sched).getSteadyFairShare(), type);
+            ((FSQueue) sched).getSteadyFairShare(), type);//根据全局的right值设置这个队列的steady fair share 值
       } else {
-        setResourceValue(
+        setResourceValue(//否则，//根据全局的right值设置这个队列的 fair share 值
             computeShare(sched, right, type), sched.getFairShare(), type);
       }
     }
@@ -186,12 +191,15 @@ public class ComputeFairShares {
   /**
    * Compute the resources assigned to a Schedulable given a particular
    * weight-to-resource ratio w2rRatio.
+   * 如果sched.getWeights().getWeight(type) * w2rRatio;介于minShare 和 maxShare之间，则直接返回sched.getWeights().getWeight(type) * w2rRatio;，
+   * 否则，如果sched.getWeights().getWeight(type) * w2rRatio;小于minShare , 则使用minShare
+   * 如果sched.getWeights().getWeight(type) * w2rRatio  > maxShare, 则使用maxShare
    */
   private static int computeShare(Schedulable sched, double w2rRatio,
       ResourceType type) {
     double share = sched.getWeights().getWeight(type) * w2rRatio;
-    share = Math.max(share, getResourceValue(sched.getMinShare(), type));
-    share = Math.min(share, getResourceValue(sched.getMaxShare(), type));
+    share = Math.max(share, getResourceValue(sched.getMinShare(), type));//取share和minShare中的较大值
+    share = Math.min(share, getResourceValue(sched.getMaxShare(), type));//取share和maxShare中的较小值
     return (int) share;
   }
 
@@ -204,13 +212,16 @@ public class ComputeFairShares {
       Collection<? extends Schedulable> schedulables,
       Collection<Schedulable> nonFixedSchedulables,
       boolean isSteadyShare, ResourceType type) {
-    int totalResource = 0;
+    int totalResource = 0;//所有队列的总资源求和
 
     for (Schedulable sched : schedulables) {
+      //如果是一个fixed队列，则fixedShare为该队列的minShare或者0
       int fixedShare = getFairShareIfFixed(sched, isSteadyShare, type);
-      if (fixedShare < 0) {
-        nonFixedSchedulables.add(sched);
+      if (fixedShare < 0) {//不是fixed，即maxShare 和weight不是0， 并且这个Schedulable是一个active的
+        nonFixedSchedulables.add(sched);//将nonFixed队列放入nonFixedSchedulables中返回
       } else {
+    	 //maxResources小于等于0  weight小于等于0 ,当求FairShare时，如果队列是非active时
+    	  //如果是fix队列，则将其steady fair share 或者 fair share设置为fixedShare
         setResourceValue(fixedShare,
             isSteadyShare
                 ? ((FSQueue)sched).getSteadyFairShare()
@@ -233,6 +244,7 @@ public class ComputeFairShares {
       boolean isSteadyShare, ResourceType type) {
 
     // Check if maxShare is 0
+	  //检查最大资源数是否小于0
     if (getResourceValue(sched.getMaxShare(), type) <= 0) {
       return 0;
     }
@@ -244,12 +256,13 @@ public class ComputeFairShares {
     }
 
     // Check if weight is 0
+    // 如果weight <= 0,则，如果minShare小于等于0 ， 返回0，否则，返回minShare，代表如果weight<=0，那么minShare就是fairShare
     if (sched.getWeights().getWeight(type) <= 0) {
       int minShare = getResourceValue(sched.getMinShare(), type);
       return (minShare <= 0) ? 0 : minShare;
     }
 
-    return -1;
+    return -1;//这个队列maxShare大于0 并且（isSteadyShare = true 或者 队列是活跃的 ）并且  weight > 0, 则返回 -1
   }
 
   private static int getResourceValue(Resource resource, ResourceType type) {

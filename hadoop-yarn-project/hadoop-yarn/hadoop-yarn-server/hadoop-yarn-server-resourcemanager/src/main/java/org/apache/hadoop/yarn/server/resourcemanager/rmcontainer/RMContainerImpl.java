@@ -178,7 +178,7 @@ public class RMContainerImpl implements RMContainer {
   public RMContainerImpl(Container container,
       ApplicationAttemptId appAttemptId, NodeId nodeId,
       String user, RMContext rmContext, long creationTime) {
-    this.stateMachine = stateMachineFactory.make(this);
+    this.stateMachine = stateMachineFactory.make(this);//一个StateMachineFactory.InternalStateMachine
     this.containerId = container.getId();
     this.nodeId = nodeId;
     this.container = container;
@@ -400,6 +400,7 @@ public class RMContainerImpl implements RMContainer {
       writeLock.lock();
       RMContainerState oldState = getState();
       try {
+    	 //StateMachineFactory.InternalStateMachine
          stateMachine.doTransition(event.getType(), event);
       } catch (InvalidStateTransitonException e) {
         LOG.error("Can't handle this event at current state", e);

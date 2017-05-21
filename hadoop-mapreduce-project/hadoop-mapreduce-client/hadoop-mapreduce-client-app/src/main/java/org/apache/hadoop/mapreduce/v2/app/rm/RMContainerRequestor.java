@@ -194,15 +194,16 @@ public abstract class RMContainerRequestor extends RMCommunicator {
         ResourceBlacklistRequest.newInstance(new ArrayList<String>(blacklistAdditions),
             new ArrayList<String>(blacklistRemovals));
     AllocateRequest allocateRequest =
-        AllocateRequest.newInstance(lastResponseID,
+        AllocateRequest.newInstance(lastResponseID,//上一次请求的responseid
           super.getApplicationProgress(), new ArrayList<ResourceRequest>(ask),
           new ArrayList<ContainerId>(release), blacklistRequest);
+    //调用ApplicationMasterProtocolPBClientImpl协议的allocate方法
     AllocateResponse allocateResponse = scheduler.allocate(allocateRequest);
     lastResponseID = allocateResponse.getResponseId();
-    availableResources = allocateResponse.getAvailableResources();
-    lastClusterNmCount = clusterNmCount;
-    clusterNmCount = allocateResponse.getNumClusterNodes();
-    int numCompletedContainers =
+    availableResources = allocateResponse.getAvailableResources();//可用资源
+    lastClusterNmCount = clusterNmCount;//集群上一次nodemanager的数量
+    clusterNmCount = allocateResponse.getNumClusterNodes();//集群新的弄得manager的数量
+    int numCompletedContainers = //已经完成的container的数量
         allocateResponse.getCompletedContainersStatuses().size();
 
     if (ask.size() > 0 || release.size() > 0) {
@@ -217,7 +218,7 @@ public abstract class RMContainerRequestor extends RMCommunicator {
     ask.clear();
     release.clear();
 
-    if (numCompletedContainers > 0) {
+    if (numCompletedContainers > 0) {//如果发现集群有新的已经完成的container，则重新申请以期望得到更多的资源分配
       // re-send limited requests when a container completes to trigger asking
       // for more containers
       requestLimitsToUpdate.addAll(requestLimits.keySet());

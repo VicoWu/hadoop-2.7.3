@@ -57,7 +57,7 @@ public class ConfiguredRMFailoverProxyProvider<T>
     this.protocol = protocol;
     this.rmProxy.checkAllowedProtocols(this.protocol);
     this.conf = new YarnConfiguration(configuration);
-    Collection<String> rmIds = HAUtil.getRMHAIds(conf);
+    Collection<String> rmIds = HAUtil.getRMHAIds(conf);//获取所有的ResourceManager id
     this.rmServiceIds = rmIds.toArray(new String[rmIds.size()]);
     conf.set(YarnConfiguration.RM_HA_ID, rmServiceIds[currentProxyIndex]);
 
@@ -71,8 +71,14 @@ public class ConfiguredRMFailoverProxyProvider<T>
             YarnConfiguration.DEFAULT_CLIENT_FAILOVER_RETRIES_ON_SOCKET_TIMEOUTS));
   }
 
+  /**
+   * 负责创建客户端代理对象
+   * @return
+   */
   private T getProxyInternal() {
     try {
+      //通过配置文件，获取远程
+      //rmProxy的运行时对象是ServerRMProxy，protocol是ResourceTracker.class
       final InetSocketAddress rmAddress = rmProxy.getRMAddress(conf, protocol);
       return RMProxy.getProxy(conf, protocol, rmAddress);
     } catch (IOException ioe) {

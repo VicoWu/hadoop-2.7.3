@@ -42,12 +42,12 @@ public class HadoopYarnProtoRPC extends YarnRPC {
   private static final Log LOG = LogFactory.getLog(HadoopYarnProtoRPC.class);
 
   @Override
-  public Object getProxy(Class protocol, InetSocketAddress addr,
-      Configuration conf) {
-    LOG.debug("Creating a HadoopYarnProtoRpc proxy for protocol " + protocol);
-    return RpcFactoryProvider.getClientFactory(conf).getClient(protocol, 1,
-        addr, conf);
-  }
+	public Object getProxy(Class protocol, InetSocketAddress addr, Configuration conf) {
+		LOG.debug("Creating a HadoopYarnProtoRpc proxy for protocol " + protocol);
+		// 默认的clientfactory是org.apache.hadoop.yarn.factories.impl.pb.RpcClientFactoryPBImpl
+		return RpcFactoryProvider.getClientFactory(conf)
+				.getClient(protocol, 1, addr, conf);
+	}
 
   @Override
   public void stopProxy(Object proxy, Configuration conf) {
@@ -77,7 +77,10 @@ public class HadoopYarnProtoRPC extends YarnRPC {
     
     //protocol ResourceTracker
     //instance ResourceTrackerService
-    return RpcFactoryProvider.getServerFactory(conf) //org.apache.hadoop.yarn.factories.impl.pb.RpcServerFactoryPBImpl
+    
+    //获取默认的YARN RPC 工厂类
+  //org.apache.hadoop.yarn.factories.impl.pb.RpcServerFactoryPBImpl
+    return RpcFactoryProvider.getServerFactory(conf) 
     		.getServer(protocol, 
         instance, addr, conf, secretManager, numHandlers, portRangeConfig);
 

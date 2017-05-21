@@ -55,6 +55,10 @@ public class RpcClientFactoryPBImpl implements RpcClientFactory {
   private RpcClientFactoryPBImpl() {
   }
   
+  /**
+   * RPC客户端工厂通过协议名称、远程服务的socket连接，来创建一个
+   * RPC客户端
+   */
   public Object getClient(Class<?> protocol, long clientVersion,
       InetSocketAddress addr, Configuration conf) {
    

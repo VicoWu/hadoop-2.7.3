@@ -348,23 +348,24 @@ public class FairScheduler extends
    * and then select the right ones using preemptTasks.
    */
   protected synchronized void preemptTasksIfNecessary() {
-    if (!shouldAttemptPreemption()) {
+    if (!shouldAttemptPreemption()) { //检查集群是否允许抢占发生
       return;
     }
 
     long curTime = getClock().getTime();
     if (curTime - lastPreemptCheckTime < preemptionInterval) {
-      return;
+      return;//还没有到抢占时机，等下一次机会吧
     }
     lastPreemptCheckTime = curTime;
 
+    //初始化抢占参数为none，即什么也不抢占
     Resource resToPreempt = Resources.clone(Resources.none());
     for (FSLeafQueue sched : queueMgr.getLeafQueues()) {
       Resources.addTo(resToPreempt, resToPreempt(sched, curTime));
     }
     if (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource, resToPreempt,
         Resources.none())) {
-      preemptResources(resToPreempt);
+      preemptResources(resToPreempt);//已经计算得到需要抢占多少资源，那么，下面就开始抢占了
     }
   }
 
@@ -464,6 +465,10 @@ public class FairScheduler extends
   }
 
   /**
+   * 计算这个队列允许抢占其它队列的资源大小。如果这个队列使用的资源低于其最小资源的时间超过了抢占超时时间，那么，
+   * 应该抢占的资源量就在它当前的fair share和它的min share之间的差额。如果队列资源已经低于它的fair share
+   * 的时间超过了fairSharePreemptionTimeout，那么他应该进行抢占的资源就是满足其fair share的资源总量。
+   * 如果两者都发生了，则抢占两个的较多者。
    * Return the resource amount that this queue is allowed to preempt, if any.
    * If the queue has been below its min share for at least its preemption
    * timeout, it should preempt the difference between its current share and
@@ -474,19 +479,30 @@ public class FairScheduler extends
    * timeouts to be identical for some reason).
    */
   protected Resource resToPreempt(FSLeafQueue sched, long curTime) {
-    long minShareTimeout = sched.getMinSharePreemptionTimeout();
-    long fairShareTimeout = sched.getFairSharePreemptionTimeout();
-    Resource resDueToMinShare = Resources.none();
-    Resource resDueToFairShare = Resources.none();
-    if (curTime - sched.getLastTimeAtMinShare() > minShareTimeout) {
+    long minShareTimeout = sched.getMinSharePreemptionTimeout();//minSharePreemptionTimeout
+    long fairShareTimeout = sched.getFairSharePreemptionTimeout();//fairSharePreemptionTimeout
+    Resource resDueToMinShare = Resources.none();//因为资源低于minShare而需要抢占的资源总量
+    Resource resDueToFairShare = Resources.none();//因为资源低于fairShare 而需要抢占的资源总量
+    if (curTime - sched.getLastTimeAtMinShare() > minShareTimeout) {//时间超过minSharePreemptionTimeout，则可以判断资源是否低于minShare
+    	 //选取sched.getMinShare()和sched.getDemand()中的较小值，demand代表队列资源需求量，即处于等待或者运行状态下的应用程序尚需的资源量
       Resource target = Resources.min(RESOURCE_CALCULATOR, clusterResource,
           sched.getMinShare(), sched.getDemand());
+      //选取Resources.none（即0）和 Resources.subtract(target, sched.getResourceUsage())中的较大值，即
+      //如果最小资源需求量大于资源使用量，则取其差额，否则，取0，代表minShare已经满足条件，无需进行抢占
       resDueToMinShare = Resources.max(RESOURCE_CALCULATOR, clusterResource,
           Resources.none(), Resources.subtract(target, sched.getResourceUsage()));
     }
-    if (curTime - sched.getLastTimeAtFairShareThreshold() > fairShareTimeout) {
+    
+    if (curTime - sched.getLastTimeAtFairShareThreshold() > fairShareTimeout) {// //时间超过fairSharePreemptionTimeout，则可以判断资源是否低于fairShare
+    	//选取sched.getFairShare()和sched.getDemand()中的较小值，demand代表队列资源需求量，即处于等待或者运行状态下的应用程序尚需的资源量
+    	//如果需要2G资源，当前的fairshare是2.5G，则需要2.5G
       Resource target = Resources.min(RESOURCE_CALCULATOR, clusterResource,
           sched.getFairShare(), sched.getDemand());
+      
+      //选取Resources.none（即0）和 Resources.subtract(target, sched.getResourceUsage())中的较大值，即
+      //如果fair share需求量大于资源使用量，则取其差额，否则，取0，代表minShare已经满足条件，无需进行抢占
+      //再拿2.5G和当前系统已经使用的资源做比较，如果2.5G-usedResource<0， 则使用Resources.none()，即不需要抢占
+      //否则，抢占资源量为2.5G-usedResource<0
       resDueToFairShare = Resources.max(RESOURCE_CALCULATOR, clusterResource,
           Resources.none(), Resources.subtract(target, sched.getResourceUsage()));
     }
@@ -1164,6 +1180,7 @@ public class FairScheduler extends
     return rootMetrics;
   }
 
+  //每一个Scheduler都是YarnScheduler，而YarnScheduler是一个EventHandler
   @Override
   public void handle(SchedulerEvent event) {
     switch (event.getType()) {
@@ -1375,6 +1392,7 @@ public class FairScheduler extends
         throw new IOException("Failed to start FairScheduler", e);
       }
 
+      //创建更新线程，负责监控队列的状态并伺机进行抢占
       updateThread = new UpdateThread();
       updateThread.setName("FairSchedulerUpdateThread");
       updateThread.setDaemon(true);
@@ -1651,8 +1669,8 @@ public class FairScheduler extends
       ResourceOption resourceOption) {
     super.updateNodeResource(nm, resourceOption);
     updateRootQueueMetrics();
-    queueMgr.getRootQueue().setSteadyFairShare(clusterResource);
-    queueMgr.getRootQueue().recomputeSteadyShares();
+    queueMgr.getRootQueue().setSteadyFairShare(clusterResource);//根队列的steady fair share就是整个集群资源
+    queueMgr.getRootQueue().recomputeSteadyShares();//开始重新计算root队列一下的子队列的steady fair share
   }
 
   /** {@inheritDoc} */

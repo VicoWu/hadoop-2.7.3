@@ -122,6 +122,7 @@ public class ContainerLauncherImpl extends AbstractService implements
       return state == ContainerState.DONE || state == ContainerState.FAILED;
     }
     
+    //和远程NodeManager通信，启动一个container
     @SuppressWarnings("unchecked")
     public synchronized void launch(ContainerRemoteLaunchEvent event) {
       LOG.info("Launching " + taskAttemptID);
@@ -254,6 +255,7 @@ public class ContainerLauncherImpl extends AbstractService implements
     LOG.info("The thread pool initial size is " + this.initialPoolSize);
 
     super.serviceInit(conf);
+    
     cmProxy = new ContainerManagementProtocolProxy(conf);
   }
 

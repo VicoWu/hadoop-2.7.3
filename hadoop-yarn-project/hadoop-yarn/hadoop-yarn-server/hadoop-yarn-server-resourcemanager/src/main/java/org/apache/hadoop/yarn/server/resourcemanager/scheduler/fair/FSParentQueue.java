@@ -37,6 +37,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainer;
 import org.apache.hadoop.yarn.util.resource.Resources;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ActiveUsersManager;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerApplicationAttempt;
+import org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.policies.FairSharePolicy;
 
 @Private
 @Unstable
@@ -60,6 +61,7 @@ public class FSParentQueue extends FSQueue {
 
   @Override
   public void recomputeShares() {
+	
     policy.computeShares(childQueues, getFairShare());
     for (FSQueue childQueue : childQueues) {
       childQueue.getMetrics().setFairShare(childQueue.getFairShare());
@@ -68,10 +70,11 @@ public class FSParentQueue extends FSQueue {
   }
 
   public void recomputeSteadyShares() {
-    policy.computeSteadyShares(childQueues, getSteadyFairShare());
+	//默认情况下，FairScheduler所有队列的policy是org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair.policies.FairSharePolicy.class
+    policy.computeSteadyShares(childQueues, getSteadyFairShare());//根据当前的policy计算子队列的steady fair share
     for (FSQueue childQueue : childQueues) {
       childQueue.getMetrics().setSteadyFairShare(childQueue.getSteadyFairShare());
-      if (childQueue instanceof FSParentQueue) {
+      if (childQueue instanceof FSParentQueue) {//递归进行计算
         ((FSParentQueue) childQueue).recomputeSteadyShares();
       }
     }

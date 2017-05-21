@@ -230,9 +230,8 @@ public abstract class Server {
   public static void registerProtocolEngine(RPC.RpcKind rpcKind, 
           Class<? extends Writable> rpcRequestWrapperClass,
           RpcInvoker rpcInvoker) {
-    RpcKindMapValue  old = 
+    RpcKindMapValue  old =     	rpcKindMap.put(rpcKind, new RpcKindMapValue(rpcRequestWrapperClass, rpcInvoker));
     if (old != null) {
-    	rpcKindMap.put(rpcKind, new RpcKindMapValue(rpcRequestWrapperClass, rpcInvoker));
       rpcKindMap.put(rpcKind, old);
       throw new IllegalArgumentException("ReRegistration of rpcKind: " +
           rpcKind);      
@@ -582,7 +581,9 @@ public abstract class Server {
       port = acceptChannel.socket().getLocalPort(); //Could be an ephemeral port
       // create a selector;
       selector= Selector.open();
-      readers = new Reader[readThreads];
+      
+      
+      readers = new Reader[readThreads];//readThreads个Reader进行处理
       for (int i = 0; i < readThreads; i++) {
         Reader reader = new Reader(
             "Socket Reader #" + (i + 1) + " for port " + port);
@@ -1520,7 +1521,7 @@ public abstract class Server {
           }
           count = channelRead(channel, connectionHeaderBuf);
           if (count < 0 || connectionHeaderBuf.remaining() > 0) {
-            return count;//如果ByteBuffer还有剩余，说明读取完毕，直接返回，否则，继续循环
+            return count;//如果ByteBuffer还有剩余，说明读取出现了异常情况，退出
           }
           int version = connectionHeaderBuf.get(0);
           // TODO we should add handler for service class later
@@ -2086,6 +2087,7 @@ public abstract class Server {
                      @Override
                      public Writable run() throws Exception {
                        // make the call
+                       //call方法是一个抽象方法，实际运行的时候会调用具体实现类的call
                        return call(call.rpcKind, call.connection.protocolName, 
                                    call.rpcRequest, call.timestamp);
 

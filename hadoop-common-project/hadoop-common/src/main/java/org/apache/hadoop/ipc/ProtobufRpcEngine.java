@@ -224,9 +224,14 @@ public class ProtobufRpcEngine implements RpcEngine {
       }
 
 
+      //提取请求方法的参数
       Message theRequest = (Message) args[1];
       final RpcResponseWrapper val;
       try {
+    	//将请求信息发送给远程服务器
+    	  //remoteId是一个 Client.ConnectionId，封装了该协议对应的远程服务器的信息，比如ip、端口等
+    	  //RpcRequestWrapper封装了请求的方法、参数信息，并且RpcRequestWrapper是一个Writable，因此
+    	  //可以被序列化然后发送给远端
         val = (RpcResponseWrapper) client.call(RPC.RpcKind.RPC_PROTOCOL_BUFFER,
             new RpcRequestWrapper(rpcRequestHeader, theRequest), remoteId,
             fallbackToSimpleAuth);
@@ -536,6 +541,7 @@ public class ProtobufRpcEngine implements RpcEngine {
           numReaders, queueSizePerHandler, conf, classNameBase(protocolImpl
               .getClass().getName()), secretManager, portRangeConfig);
       this.verbose = verbose;  
+      //将协议和协议的具体实现注册给RPC.Server
       registerProtocolAndImpl(RPC.RpcKind.RPC_PROTOCOL_BUFFER, protocolClass,
           protocolImpl);
     }
@@ -587,15 +593,21 @@ public class ProtobufRpcEngine implements RpcEngine {
           Writable writableRequest, long receiveTime) throws Exception {
         RpcRequestWrapper request = (RpcRequestWrapper) writableRequest;
         RequestHeaderProto rpcRequest = request.requestHeader;
+        //从请求中获取方法、协议名称
         String methodName = rpcRequest.getMethodName();
+        //从请求中取出proto名称
         String protoName = rpcRequest.getDeclaringClassProtocolName();
+        //从请求中取出版本号
         long clientVersion = rpcRequest.getClientProtocolVersion();
         if (server.verbose)
           LOG.info("Call: protocol=" + protocol + ", method=" + methodName);
         
+        //向RPC.Server()获取它所管理的具体协议对应的实现，比如ResourceTracker协议对应的BlockingService
         ProtoClassProtoImpl protocolImpl = getProtocolImpl(server, protoName,
             clientVersion);
+        //这个service是在ResourceTracker里面创建的一个匿名实例newReflectiveBlockingService()
         BlockingService service = (BlockingService) protocolImpl.protocolImpl;
+        //通过远程调用的方法名称，获取方法描述信息
         MethodDescriptor methodDescriptor = service.getDescriptorForType()
             .findMethodByName(methodName);
         if (methodDescriptor == null) {
@@ -604,7 +616,10 @@ public class ProtobufRpcEngine implements RpcEngine {
           LOG.warn(msg);
           throw new RpcNoSuchMethodException(msg);
         }
+        //获取请求的proto对应的java 类，如RegisterNodeManagerRequestProto，通过protobuf生成的proto的java类都是一个Message
         Message prototype = service.getRequestPrototype(methodDescriptor);
+        
+        //将实际请求的参数数据匹配到对应的请求类
         Message param = prototype.newBuilderForType()
             .mergeFrom(request.theRequestRead).build();
         

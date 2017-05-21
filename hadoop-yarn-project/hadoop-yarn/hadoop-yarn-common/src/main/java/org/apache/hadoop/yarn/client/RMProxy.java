@@ -55,204 +55,194 @@ import com.google.common.annotations.VisibleForTesting;
 @SuppressWarnings("unchecked")
 public class RMProxy<T> {
 
-  private static final Log LOG = LogFactory.getLog(RMProxy.class);
+	private static final Log LOG = LogFactory.getLog(RMProxy.class);
 
-  protected RMProxy() {}
+	protected RMProxy() {
+	}
 
-  /**
-   * Verify the passed protocol is supported.
-   */
-  @Private
-  protected void checkAllowedProtocols(Class<?> protocol) {}
+	/**
+	 * Verify the passed protocol is supported.
+	 */
+	@Private
+	protected void checkAllowedProtocols(Class<?> protocol) {
+	}
 
-  /**
-   * Get the ResourceManager address from the provided Configuration for the
-   * given protocol.
-   */
-  @Private
-  protected InetSocketAddress getRMAddress(
-      YarnConfiguration conf, Class<?> protocol) throws IOException {
-    throw new UnsupportedOperationException("This method should be invoked " +
-        "from an instance of ClientRMProxy or ServerRMProxy");
-  }
+	/**
+	 * Get the ResourceManager address from the provided Configuration for the
+	 * given protocol.
+	 */
+	@Private
+	protected InetSocketAddress getRMAddress(YarnConfiguration conf, Class<?> protocol) throws IOException {
+		throw new UnsupportedOperationException(
+				"This method should be invoked " + "from an instance of ClientRMProxy or ServerRMProxy");
+	}
 
-  /**
-   * Create a proxy for the specified protocol. For non-HA,
-   * this is a direct connection to the ResourceManager address. When HA is
-   * enabled, the proxy handles the failover between the ResourceManagers as
-   * well.
-   */
-  @Private
-  protected static <T> T createRMProxy(final Configuration configuration,
-      final Class<T> protocol, RMProxy instance) throws IOException {
-    YarnConfiguration conf = (configuration instanceof YarnConfiguration)
-        ? (YarnConfiguration) configuration
-        : new YarnConfiguration(configuration);
-    RetryPolicy retryPolicy = createRetryPolicy(conf);
-    if (HAUtil.isHAEnabled(conf)) {
-      RMFailoverProxyProvider<T> provider =
-          instance.createRMFailoverProxyProvider(conf, protocol);
-      return (T) RetryProxy.create(protocol, provider, retryPolicy);
-    } else {
-      InetSocketAddress rmAddress = instance.getRMAddress(conf, protocol);
-      LOG.info("Connecting to ResourceManager at " + rmAddress);
-      T proxy = RMProxy.<T>getProxy(conf, protocol, rmAddress);
-      return (T) RetryProxy.create(protocol, proxy, retryPolicy);
-    }
-  }
+	/**
+	 * Create a proxy for the specified protocol. For non-HA, this is a direct
+	 * connection to the ResourceManager address. When HA is enabled, the proxy
+	 * handles the failover between the ResourceManagers as well.
+	 */
+	@Private
+	protected static <T> T createRMProxy(final Configuration configuration, final Class<T> protocol, RMProxy instance)
+			throws IOException {
+		YarnConfiguration conf = (configuration instanceof YarnConfiguration) ? (YarnConfiguration) configuration
+				: new YarnConfiguration(configuration);
+		RetryPolicy retryPolicy = createRetryPolicy(conf);
+		// 通过读取配置文件，判断是否开启High Availability模式
+		if (HAUtil.isHAEnabled(conf)) {// 开启HA模式
+			//如果开启HA，则provider是一个org.apache.hadoop.yarn.client.ConfiguredRMFailoverProxyProvider
+			RMFailoverProxyProvider<T> provider = instance.createRMFailoverProxyProvider(conf, protocol);//instance是ServerRMProxy
+			return (T) RetryProxy.create(protocol, provider, retryPolicy);
+		} else {// 不开启HA模式
+			InetSocketAddress rmAddress = instance.getRMAddress(conf, protocol);
+			LOG.info("Connecting to ResourceManager at " + rmAddress);
+			T proxy = RMProxy.<T>getProxy(conf, protocol, rmAddress);
+			return (T) RetryProxy.create(protocol, proxy, retryPolicy);
+		}
+	}
 
-  /**
-   * @deprecated
-   * This method is deprecated and is not used by YARN internally any more.
-   * To create a proxy to the RM, use ClientRMProxy#createRMProxy or
-   * ServerRMProxy#createRMProxy.
-   *
-   * Create a proxy to the ResourceManager at the specified address.
-   *
-   * @param conf Configuration to generate retry policy
-   * @param protocol Protocol for the proxy
-   * @param rmAddress Address of the ResourceManager
-   * @param <T> Type information of the proxy
-   * @return Proxy to the RM
-   * @throws IOException
-   */
-  @Deprecated
-  public static <T> T createRMProxy(final Configuration conf,
-      final Class<T> protocol, InetSocketAddress rmAddress) throws IOException {
-    RetryPolicy retryPolicy = createRetryPolicy(conf);
-    T proxy = RMProxy.<T>getProxy(conf, protocol, rmAddress);
-    LOG.info("Connecting to ResourceManager at " + rmAddress);
-    return (T) RetryProxy.create(protocol, proxy, retryPolicy);
-  }
+	/**
+	 * @deprecated This method is deprecated and is not used by YARN internally
+	 *             any more. To create a proxy to the RM, use
+	 *             ClientRMProxy#createRMProxy or ServerRMProxy#createRMProxy.
+	 *
+	 *             Create a proxy to the ResourceManager at the specified
+	 *             address.
+	 *
+	 * @param conf
+	 *            Configuration to generate retry policy
+	 * @param protocol
+	 *            Protocol for the proxy
+	 * @param rmAddress
+	 *            Address of the ResourceManager
+	 * @param <T>
+	 *            Type information of the proxy
+	 * @return Proxy to the RM
+	 * @throws IOException
+	 */
+	@Deprecated
+	public static <T> T createRMProxy(final Configuration conf, final Class<T> protocol, InetSocketAddress rmAddress)
+			throws IOException {
+		RetryPolicy retryPolicy = createRetryPolicy(conf);
+		T proxy = RMProxy.<T>getProxy(conf, protocol, rmAddress);
+		LOG.info("Connecting to ResourceManager at " + rmAddress);
+		return (T) RetryProxy.create(protocol, proxy, retryPolicy);
+	}
 
-  /**
-   * Get a proxy to the RM at the specified address. To be used to create a
-   * RetryProxy.
-   */
-  @Private
-  static <T> T getProxy(final Configuration conf,
-      final Class<T> protocol, final InetSocketAddress rmAddress)
-      throws IOException {
-    return UserGroupInformation.getCurrentUser().doAs(
-      new PrivilegedAction<T>() {
-        @Override
-        public T run() {
-          return (T) YarnRPC.create(conf).getProxy(protocol, rmAddress, conf);
-        }
-      });
-  }
+	/**
+	 * Get a proxy to the RM at the specified address. To be used to create a
+	 * RetryProxy.
+	 */
+	@Private
+	static <T> T getProxy(final Configuration conf, final Class<T> protocol, final InetSocketAddress rmAddress)
+			throws IOException {
+		return UserGroupInformation.getCurrentUser().doAs(new PrivilegedAction<T>() {
+			@Override
+			public T run() {
+				//Yarn的所有RPC客户端和服务器端都是用YarnRPC进行创建
+				//默认是org.apache.hadoop.yarn.ipc.HadoopYarnProtoRPC
+				return (T) YarnRPC.create(conf)
+						.getProxy(protocol, rmAddress, conf);
+			}
+		});
+	}
 
-  /**
-   * Helper method to create FailoverProxyProvider.
-   */
-  private <T> RMFailoverProxyProvider<T> createRMFailoverProxyProvider(
-      Configuration conf, Class<T> protocol) {
-    Class<? extends RMFailoverProxyProvider<T>> defaultProviderClass;
-    try {
-      defaultProviderClass = (Class<? extends RMFailoverProxyProvider<T>>)
-          Class.forName(
-              YarnConfiguration.DEFAULT_CLIENT_FAILOVER_PROXY_PROVIDER);
-    } catch (Exception e) {
-      throw new YarnRuntimeException("Invalid default failover provider class" +
-          YarnConfiguration.DEFAULT_CLIENT_FAILOVER_PROXY_PROVIDER, e);
-    }
+	/**
+	 * Helper method to create FailoverProxyProvider.
+	 */
+	private <T> RMFailoverProxyProvider<T> createRMFailoverProxyProvider(Configuration conf, Class<T> protocol) {
+		Class<? extends RMFailoverProxyProvider<T>> defaultProviderClass;
+		try {
+			defaultProviderClass = (Class<? extends RMFailoverProxyProvider<T>>) Class
+					.forName(YarnConfiguration.DEFAULT_CLIENT_FAILOVER_PROXY_PROVIDER);
+		} catch (Exception e) {
+			throw new YarnRuntimeException("Invalid default failover provider class"
+					+ YarnConfiguration.DEFAULT_CLIENT_FAILOVER_PROXY_PROVIDER, e);
+		}
+		// 通过配置文件中定义的provider，采用反射方式，建立这个FailoverProxyProvider实例
+		// 默认情况下，这个Provider是
+		// org.apache.hadoop.yarn.client.ConfiguredRMFailoverProxyProvider
+		RMFailoverProxyProvider<T> provider = ReflectionUtils
+				.newInstance(conf.getClass(YarnConfiguration.CLIENT_FAILOVER_PROXY_PROVIDER, defaultProviderClass,
+						RMFailoverProxyProvider.class), conf);
+		provider.init(conf, (RMProxy<T>) this, protocol);
+		return provider;
+	}
 
-    RMFailoverProxyProvider<T> provider = ReflectionUtils.newInstance(
-        conf.getClass(YarnConfiguration.CLIENT_FAILOVER_PROXY_PROVIDER,
-            defaultProviderClass, RMFailoverProxyProvider.class), conf);
-    provider.init(conf, (RMProxy<T>) this, protocol);
-    return provider;
-  }
+	/**
+	 * Fetch retry policy from Configuration
+	 */
+	@Private
+	@VisibleForTesting
+	public static RetryPolicy createRetryPolicy(Configuration conf) {
+		long rmConnectWaitMS = conf.getLong(YarnConfiguration.RESOURCEMANAGER_CONNECT_MAX_WAIT_MS,
+				YarnConfiguration.DEFAULT_RESOURCEMANAGER_CONNECT_MAX_WAIT_MS);
+		long rmConnectionRetryIntervalMS = conf.getLong(YarnConfiguration.RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS,
+				YarnConfiguration.DEFAULT_RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS);
 
-  /**
-   * Fetch retry policy from Configuration
-   */
-  @Private
-  @VisibleForTesting
-  public static RetryPolicy createRetryPolicy(Configuration conf) {
-    long rmConnectWaitMS =
-        conf.getLong(
-            YarnConfiguration.RESOURCEMANAGER_CONNECT_MAX_WAIT_MS,
-            YarnConfiguration.DEFAULT_RESOURCEMANAGER_CONNECT_MAX_WAIT_MS);
-    long rmConnectionRetryIntervalMS =
-        conf.getLong(
-            YarnConfiguration.RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS,
-            YarnConfiguration
-                .DEFAULT_RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS);
+		boolean waitForEver = (rmConnectWaitMS == -1);
+		if (!waitForEver) {
+			if (rmConnectWaitMS < 0) {
+				throw new YarnRuntimeException(
+						"Invalid Configuration. " + YarnConfiguration.RESOURCEMANAGER_CONNECT_MAX_WAIT_MS
+								+ " can be -1, but can not be other negative numbers");
+			}
 
-    boolean waitForEver = (rmConnectWaitMS == -1);
-    if (!waitForEver) {
-      if (rmConnectWaitMS < 0) {
-        throw new YarnRuntimeException("Invalid Configuration. "
-            + YarnConfiguration.RESOURCEMANAGER_CONNECT_MAX_WAIT_MS
-            + " can be -1, but can not be other negative numbers");
-      }
+			// try connect once
+			if (rmConnectWaitMS < rmConnectionRetryIntervalMS) {
+				LOG.warn(YarnConfiguration.RESOURCEMANAGER_CONNECT_MAX_WAIT_MS + " is smaller than "
+						+ YarnConfiguration.RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS + ". Only try connect once.");
+				rmConnectWaitMS = 0;
+			}
+		}
 
-      // try connect once
-      if (rmConnectWaitMS < rmConnectionRetryIntervalMS) {
-        LOG.warn(YarnConfiguration.RESOURCEMANAGER_CONNECT_MAX_WAIT_MS
-            + " is smaller than "
-            + YarnConfiguration.RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS
-            + ". Only try connect once.");
-        rmConnectWaitMS = 0;
-      }
-    }
+		// Handle HA case first
+		if (HAUtil.isHAEnabled(conf)) {
+			final long failoverSleepBaseMs = conf.getLong(YarnConfiguration.CLIENT_FAILOVER_SLEEPTIME_BASE_MS,
+					rmConnectionRetryIntervalMS);
 
-    // Handle HA case first
-    if (HAUtil.isHAEnabled(conf)) {
-      final long failoverSleepBaseMs = conf.getLong(
-          YarnConfiguration.CLIENT_FAILOVER_SLEEPTIME_BASE_MS,
-          rmConnectionRetryIntervalMS);
+			final long failoverSleepMaxMs = conf.getLong(YarnConfiguration.CLIENT_FAILOVER_SLEEPTIME_MAX_MS,
+					rmConnectionRetryIntervalMS);
 
-      final long failoverSleepMaxMs = conf.getLong(
-          YarnConfiguration.CLIENT_FAILOVER_SLEEPTIME_MAX_MS,
-          rmConnectionRetryIntervalMS);
+			int maxFailoverAttempts = conf.getInt(YarnConfiguration.CLIENT_FAILOVER_MAX_ATTEMPTS, -1);
 
-      int maxFailoverAttempts = conf.getInt(
-          YarnConfiguration.CLIENT_FAILOVER_MAX_ATTEMPTS, -1);
+			if (maxFailoverAttempts == -1) {
+				if (waitForEver) {
+					maxFailoverAttempts = Integer.MAX_VALUE;
+				} else {
+					maxFailoverAttempts = (int) (rmConnectWaitMS / failoverSleepBaseMs);
+				}
+			}
 
-      if (maxFailoverAttempts == -1) {
-        if (waitForEver) {
-          maxFailoverAttempts = Integer.MAX_VALUE;
-        } else {
-          maxFailoverAttempts = (int) (rmConnectWaitMS / failoverSleepBaseMs);
-        }
-      }
+			return RetryPolicies.failoverOnNetworkException(RetryPolicies.TRY_ONCE_THEN_FAIL, maxFailoverAttempts,
+					failoverSleepBaseMs, failoverSleepMaxMs);
+		}
 
-      return RetryPolicies.failoverOnNetworkException(
-          RetryPolicies.TRY_ONCE_THEN_FAIL, maxFailoverAttempts,
-          failoverSleepBaseMs, failoverSleepMaxMs);
-    }
+		if (rmConnectionRetryIntervalMS < 0) {
+			throw new YarnRuntimeException("Invalid Configuration. "
+					+ YarnConfiguration.RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS + " should not be negative.");
+		}
 
-    if (rmConnectionRetryIntervalMS < 0) {
-      throw new YarnRuntimeException("Invalid Configuration. " +
-          YarnConfiguration.RESOURCEMANAGER_CONNECT_RETRY_INTERVAL_MS +
-          " should not be negative.");
-    }
+		RetryPolicy retryPolicy = null;
+		if (waitForEver) {
+			retryPolicy = RetryPolicies.RETRY_FOREVER;
+		} else {
+			retryPolicy = RetryPolicies.retryUpToMaximumTimeWithFixedSleep(rmConnectWaitMS, rmConnectionRetryIntervalMS,
+					TimeUnit.MILLISECONDS);
+		}
 
-    RetryPolicy retryPolicy = null;
-    if (waitForEver) {
-      retryPolicy = RetryPolicies.RETRY_FOREVER;
-    } else {
-      retryPolicy =
-          RetryPolicies.retryUpToMaximumTimeWithFixedSleep(rmConnectWaitMS,
-              rmConnectionRetryIntervalMS, TimeUnit.MILLISECONDS);
-    }
+		Map<Class<? extends Exception>, RetryPolicy> exceptionToPolicyMap = new HashMap<Class<? extends Exception>, RetryPolicy>();
 
-    Map<Class<? extends Exception>, RetryPolicy> exceptionToPolicyMap =
-        new HashMap<Class<? extends Exception>, RetryPolicy>();
-
-    exceptionToPolicyMap.put(EOFException.class, retryPolicy);
-    exceptionToPolicyMap.put(ConnectException.class, retryPolicy);
-    exceptionToPolicyMap.put(NoRouteToHostException.class, retryPolicy);
-    exceptionToPolicyMap.put(UnknownHostException.class, retryPolicy);
-    exceptionToPolicyMap.put(ConnectTimeoutException.class, retryPolicy);
-    exceptionToPolicyMap.put(RetriableException.class, retryPolicy);
-    exceptionToPolicyMap.put(SocketException.class, retryPolicy);
-    // YARN-4288: local IOException is also possible.
-    exceptionToPolicyMap.put(IOException.class, retryPolicy);
-    // Not retry on remote IO exception.
-    return RetryPolicies.retryOtherThanRemoteException(
-        RetryPolicies.TRY_ONCE_THEN_FAIL, exceptionToPolicyMap);
-  }
+		exceptionToPolicyMap.put(EOFException.class, retryPolicy);
+		exceptionToPolicyMap.put(ConnectException.class, retryPolicy);
+		exceptionToPolicyMap.put(NoRouteToHostException.class, retryPolicy);
+		exceptionToPolicyMap.put(UnknownHostException.class, retryPolicy);
+		exceptionToPolicyMap.put(ConnectTimeoutException.class, retryPolicy);
+		exceptionToPolicyMap.put(RetriableException.class, retryPolicy);
+		exceptionToPolicyMap.put(SocketException.class, retryPolicy);
+		// YARN-4288: local IOException is also possible.
+		exceptionToPolicyMap.put(IOException.class, retryPolicy);
+		// Not retry on remote IO exception.
+		return RetryPolicies.retryOtherThanRemoteException(RetryPolicies.TRY_ONCE_THEN_FAIL, exceptionToPolicyMap);
+	}
 }

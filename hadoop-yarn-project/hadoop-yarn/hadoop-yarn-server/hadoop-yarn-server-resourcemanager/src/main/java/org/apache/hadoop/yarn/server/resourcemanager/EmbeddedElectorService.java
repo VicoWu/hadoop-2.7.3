@@ -82,7 +82,7 @@ public class EmbeddedElectorService extends AbstractService
 
     long zkSessionTimeout = conf.getLong(YarnConfiguration.RM_ZK_TIMEOUT_MS,
         YarnConfiguration.DEFAULT_RM_ZK_TIMEOUT_MS);
-
+  
     List<ACL> zkAcls = RMZKUtils.getZKAcls(conf);
     List<ZKUtil.ZKAuthInfo> zkAuths = RMZKUtils.getZKAuths(conf);
 

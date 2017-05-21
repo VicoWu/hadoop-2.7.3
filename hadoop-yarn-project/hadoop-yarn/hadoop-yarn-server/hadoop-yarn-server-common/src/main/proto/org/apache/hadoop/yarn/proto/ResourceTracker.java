@@ -62,14 +62,22 @@ public final class ResourceTracker {
       };
     }
 
+     /**
+     * 创建服务器端的阻塞代理对象
+     * @param impl 具体的被代理类，以ResourceTracker 为例，impl为ResourceTrackerPBServiceImpl
+     * @return 返回代理类BlockingService
+     */
     public static com.google.protobuf.BlockingService
         newReflectiveBlockingService(final BlockingInterface impl) {
+    	//创建一个匿名类，用来对ResourceTrackerPBServiceImpl进行代理
       return new com.google.protobuf.BlockingService() {
+    	 //获取接口描述信息
         public final com.google.protobuf.Descriptors.ServiceDescriptor
             getDescriptorForType() {
           return getDescriptor();
         }
 
+        //对方法执行进行代理
         public final com.google.protobuf.Message callBlockingMethod(
             com.google.protobuf.Descriptors.MethodDescriptor method,
             com.google.protobuf.RpcController controller,

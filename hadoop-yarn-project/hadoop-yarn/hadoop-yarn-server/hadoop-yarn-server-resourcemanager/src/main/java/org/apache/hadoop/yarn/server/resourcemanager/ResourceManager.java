@@ -491,6 +491,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
       rmContext.setScheduler(scheduler);
 
       //RMActiveServices的时间调度器AsyncScheduler
+      //创建队列事件的调度器
       schedulerDispatcher = createSchedulerEventDispatcher();
       addIfService(schedulerDispatcher);
       rmDispatcher.register(SchedulerEventType.class, schedulerDispatcher);
@@ -535,6 +536,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
       }
 
       // creating monitors that handle preemption
+      //对于CapacityScheduler,创建抢占策略监视器，用来对队列资源进行监控并根据指定策略触发抢占
       createPolicyMonitors();
 
       masterService = createApplicationMasterService();
@@ -617,6 +619,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
     }
 
     protected void createPolicyMonitors() {
+      //只有CapacityScheduler需要配置RM_SCHEDULER_ENABLE_MONITORS，因为FairScheduler不是一个PreemptableResourceScheduler
       if (scheduler instanceof PreemptableResourceScheduler
           && conf.getBoolean(YarnConfiguration.RM_SCHEDULER_ENABLE_MONITORS,
           YarnConfiguration.DEFAULT_RM_SCHEDULER_ENABLE_MONITORS)) {
@@ -690,6 +693,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
           }
 
           try {
+        	//每一个Scheduler都是一个EventHandler,因为所有的Scheduler都是YarnScheduler，而YarnScheduler是一个EventHandler
             scheduler.handle(event);
           } catch (Throwable t) {
             // An error occurred, but we are shutting down anyway.

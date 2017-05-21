@@ -601,7 +601,8 @@ public class RPC {
                                  InetSocketAddress addr, Configuration conf)
      throws IOException {
 
-     return getProtocolProxy(protocol, clientVersion, addr, conf).getProxy();
+     return getProtocolProxy(protocol, clientVersion, addr, conf) //ProtocolProxy<ResourceTrackPB>
+    		 .getProxy(); //ResourceTrackerPB
    }
   
   /**
@@ -797,6 +798,7 @@ public class RPC {
         throw new HadoopIllegalArgumentException("instance is not set");
       }
       //Engine有ProtobugRpcEngine或者WriteableRpcEngine
+      //根据协议名称选择对应的engine，然后让engine自己去创建对应的server
       return getProtocolEngine(this.protocol, this.conf).getServer(
           this.protocol, this.instance, this.bindAddress, this.port,
           this.numHandlers, this.numReaders, this.queueSizePerHandler,

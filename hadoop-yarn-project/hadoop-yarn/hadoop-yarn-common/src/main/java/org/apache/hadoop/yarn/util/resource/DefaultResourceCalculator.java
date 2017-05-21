@@ -25,6 +25,7 @@ import org.apache.hadoop.yarn.api.records.Resource;
 @Unstable
 public class DefaultResourceCalculator extends ResourceCalculator {
   
+  //DefaultResourceCalculator之比较内存大小
   @Override
   public int compare(Resource unused, Resource lhs, Resource rhs) {
     // Only consider memory

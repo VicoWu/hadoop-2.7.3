@@ -57,7 +57,8 @@ public abstract class YarnRPC {
   
   public static YarnRPC create(Configuration conf) {
     LOG.debug("Creating YarnRPC for " + 
-        conf.get(YarnConfiguration.IPC_RPC_IMPL)); //yarn.ipc.rpc.class  默认org.apache.hadoop.yarn.ipc.HadoopYarnProtoRPC
+        conf.get(YarnConfiguration.IPC_RPC_IMPL)); 
+    //yarn.ipc.rpc.class  默认是org.apache.hadoop.yarn.ipc.HadoopYarnProtoRPC
     String clazzName = conf.get(YarnConfiguration.IPC_RPC_IMPL);
     if (clazzName == null) {
       clazzName = YarnConfiguration.DEFAULT_IPC_RPC_IMPL;

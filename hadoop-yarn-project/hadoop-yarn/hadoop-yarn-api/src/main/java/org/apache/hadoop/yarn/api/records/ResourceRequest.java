@@ -79,6 +79,7 @@ public abstract class ResourceRequest implements Comparable<ResourceRequest> {
   public static ResourceRequest newInstance(Priority priority, String hostName,
       Resource capability, int numContainers, boolean relaxLocality,
       String labelExpression) {
+	//构建资源请求对象,是一个
     ResourceRequest request = Records.newRecord(ResourceRequest.class);
     request.setPriority(priority);
     request.setResourceName(hostName);

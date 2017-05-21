@@ -108,7 +108,8 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     Object service = null;
     try {
     	//instance:ResourceTrackerService
-      service = constructor.newInstance(instance);
+    	//service:ResourceTrackerPBServiceImpl
+      service = constructor.newInstance(instance);//以ResourceTrackerService实例作为构造函数参数，构造ResourceTrackerPBServiceImpl
     } catch (InvocationTargetException e) {
       throw new YarnRuntimeException(e);
     } catch (IllegalAccessException e) {
@@ -123,12 +124,15 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     if (method == null) {
       Class<?> protoClazz = null;
       try {
+    	//protoClazz org.apache.hadoop.yarn.proto.ResourceTracker
         protoClazz = localConf.getClassByName(getProtoClassName(protocol));
       } catch (ClassNotFoundException e) {
         throw new YarnRuntimeException("Failed to load class: ["
             + getProtoClassName(protocol) + "]", e);
       }
       try {
+    	  //org.apache.hadoop.yarn.proto.ResourceTracker.newReflectiveBlockingService()
+    	  //静态方法newReflectiveBlockingService
         method = protoClazz.getMethod("newReflectiveBlockingService",
             pbProtocol.getInterfaces()[0]);
         method.setAccessible(true);
@@ -139,8 +143,13 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
     }
     
     try {
+    // 最终返回创建完毕的RPC.Server，这个RPC.Server已经记录了对应的rpcType , protocol对应的
+    	//engine和对应的处理类(BlockingService)
       return createServer(pbProtocol, addr, conf, secretManager, numHandlers,
-          (BlockingService)method.invoke(null, service), portRangeConfig);
+    		//调用静态方法org.apache.hadoop.yarn.proto.ResourceTracker.newReflectiveBlockingService()
+    		  //参数为ResourceTrackerPBServiceImpl
+          (BlockingService)method.invoke(null, service)
+          , portRangeConfig);
     } catch (InvocationTargetException e) {
       throw new YarnRuntimeException(e);
     } catch (IllegalAccessException e) {
@@ -189,6 +198,7 @@ public class RpcServerFactoryPBImpl implements RpcServerFactory {
         .setSecretManager(secretManager).setPortRangeConfig(portRangeConfig)
         .build();
     LOG.info("Adding protocol "+pbProtocol.getCanonicalName()+" to the server");
+    //将创建玩从blockingService交付给RPC.Server进行管理
     server.addProtocol(RPC.RpcKind.RPC_PROTOCOL_BUFFER, pbProtocol, blockingService);
     return server;
   }

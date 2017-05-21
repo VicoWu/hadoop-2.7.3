@@ -29,7 +29,7 @@ import org.apache.hadoop.yarn.factory.providers.RecordFactoryProvider;
 @Unstable
 public class Records {
   // The default record factory
-  private static final RecordFactory factory =
+  private static final RecordFactory factory =//默认是一个org.apache.hadoop.yarn.factories.impl.pb.RecordFactoryPBImpl.RecordFactoryPBImpl
       RecordFactoryProvider.getRecordFactory(null);
 
   public static <T> T newRecord(Class<T> cls) {

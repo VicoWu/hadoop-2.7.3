@@ -867,12 +867,12 @@ public class MRAppMaster extends CompositeService {
 
     @Override
     protected void serviceStart() throws Exception {
-      if (job.isUber()) {
+      if (job.isUber()) {//uber模式，使用本地container运行，加速小程序的运行
         MRApps.setupDistributedCacheLocal(getConfig());
         this.containerAllocator = new LocalContainerAllocator(
             this.clientService, this.context, nmHost, nmPort, nmHttpPort
             , containerID);
-      } else {
+      } else {//正常分布式模式，使用RMContainerAllocator
         this.containerAllocator = new RMContainerAllocator(
             this.clientService, this.context);
       }

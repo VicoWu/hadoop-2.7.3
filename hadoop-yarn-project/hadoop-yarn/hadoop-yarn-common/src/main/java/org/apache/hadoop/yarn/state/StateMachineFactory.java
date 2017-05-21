@@ -295,14 +295,15 @@ final public class StateMachineFactory
     //  maybeMakeStateMachineTable() when we build an InnerStateMachine ,
     //  and this code only gets called from inside a working InnerStateMachine .
     Map<EVENTTYPE, Transition<OPERAND, STATE, EVENTTYPE, EVENT>> transitionMap
-      = stateMachineTable.get(oldState);
+      = stateMachineTable.get(oldState);//根据当前状态上所有可能发生的Transition
     if (transitionMap != null) {
       Transition<OPERAND, STATE, EVENTTYPE, EVENT> transition
-          = transitionMap.get(eventType);
+          = transitionMap.get(eventType);//获取当前事件上定义的transition
       if (transition != null) {
         return transition.doTransition(operand, oldState, event, eventType);
       }
     }
+    //不合法状态机转换，抛出异常
     throw new InvalidStateTransitonException(oldState, eventType);
   }
 
