@@ -341,11 +341,9 @@ public class FairScheduler extends
   }
 
   /**
-   * Check for queues that need tasks preempted, either because they have been
-   * below their guaranteed share for minSharePreemptionTimeout or they have
-   * been below their fair share threshold for the fairSharePreemptionTimeout. If
-   * such queues exist, compute how many tasks of each type need to be preempted
-   * and then select the right ones using preemptTasks.
+   * 检查所有缺乏资源的Scheduler, 无论它缺乏资源是因为处于minShare的时间超过了minSharePreemptionTimeout
+   * 还是因为它处于fairShare的时间已经超过了fairSharePreemptionTimeout。在统计了所有Scheduler
+   * 缺乏的资源并求和以后，就开始尝试进行资源抢占。
    */
   protected synchronized void preemptTasksIfNecessary() {
     if (!shouldAttemptPreemption()) { //检查集群是否允许抢占发生
@@ -361,15 +359,23 @@ public class FairScheduler extends
     //初始化抢占参数为none，即什么也不抢占
     Resource resToPreempt = Resources.clone(Resources.none());
     for (FSLeafQueue sched : queueMgr.getLeafQueues()) {
-      Resources.addTo(resToPreempt, resToPreempt(sched, curTime));
+      //计算所有叶子队列需要抢占的资源，累加到资源变量resToPreempt中
+      Resources.addTo(resToPreempt, resToPreempt(sched, curTime)); 
     }
     if (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource, resToPreempt,
-        Resources.none())) {
+        Resources.none())) { //如果需要抢占的资源大于Resources.none()，即大于0
       preemptResources(resToPreempt);//已经计算得到需要抢占多少资源，那么，下面就开始抢占了
     }
   }
 
   /**
+   * 基于已经计算好的需要抢占的资源（toPreempt）进行资源抢占。每一轮抢占，我们从root 队列开始，
+   * 一级一级往下进行，直到我们选择了一个候选的application.当然，抢占分优先级进行。
+   * 依据每一个队列的policy，抢占方式有所不同。对于fair policy或者drf policy, 会选择超过
+   * fair share（这里的fair scheduler都是指Instantaneous Fair Share）
+   * 最多的ChildSchedulable进行抢占，但是，如果是fifo policy,则选择最后执行的application进行
+   * 抢占。当然，同一个application往往含有多个container，因此同一个application内部container
+   * 的抢占也分优先级。
    * Preempt a quantity of resources. Each round, we start from the root queue,
    * level-by-level, until choosing a candidate application.
    * The policy for prioritizing preemption for each queue depends on its
@@ -383,13 +389,17 @@ public class FairScheduler extends
   protected void preemptResources(Resource toPreempt) {
     long start = getClock().getTime();
     if (Resources.equals(toPreempt, Resources.none())) {
-      return;
+      return;//如果需要的资源为0，那没必要抢占
     }
 
     // Scan down the list of containers we've already warned and kill them
     // if we need to.  Remove any containers from the list that we don't need
     // or that are no longer running.
+    //warnedContainers，被警告的container，即在某轮抢占中被任务满足被强占条件的container
+    //同样，yarn发现一个container满足被抢占规则，绝对不是立刻抢占，而是等待一个超时时间，
+    //试图让app自动释放这个container，如果到了超时时间还是没有，那么就可以直接kill了
     Iterator<RMContainer> warnedIter = warnedContainers.iterator();
+    //toPreempt代表依旧需要进行抢占的资源
     while (warnedIter.hasNext()) {
       RMContainer container = warnedIter.next();
       if ((container.getState() == RMContainerState.RUNNING ||
@@ -397,8 +407,9 @@ public class FairScheduler extends
           Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource,
               toPreempt, Resources.none())) {
         warnOrKillContainer(container);
-        Resources.subtractFrom(toPreempt, container.getContainer().getResource());
+        Resources.subtractFrom(toPreempt, container.getContainer().getResource());//抢占到了一个container，则从toPreempt中去掉这个资源
       } else {
+    	//这个container已经没有运行了，不需要进行kill了
         warnedIter.remove();
       }
     }
@@ -409,14 +420,16 @@ public class FairScheduler extends
         queue.resetPreemptedResources();
       }
 
+      //toPreempt代表了目前仍需要抢占的资源，通过不断循环，一轮一轮抢占，toPreempt逐渐减小
       while (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource,
-          toPreempt, Resources.none())) {
+          toPreempt, Resources.none())) { //只要还没有达到抢占要求
         RMContainer container =
-            getQueueManager().getRootQueue().preemptContainer();
+            getQueueManager().getRootQueue().preemptContainer();  
         if (container == null) {
           break;
         } else {
           warnOrKillContainer(container);
+          //将这个container加入到警告列表，以后每一轮都会检查它是否被释放或者抢占，如果超过了一定时间还是没有被抢占或者主动释放，就可以直接kill并抢占了
           warnedContainers.add(container);
           Resources.subtractFrom(
               toPreempt, container.getContainer().getResource());
@@ -446,6 +459,7 @@ public class FairScheduler extends
     if (time != null) {
       // if we asked for preemption more than maxWaitTimeBeforeKill ms ago,
       // proceed with kill
+      //如果这个container在以前已经被标记为需要被抢占，并且时间已经超过了maxWaitTimeBeforeKill，那么这个container可以直接杀死了
       if (time + waitTimeBeforeKill < getClock().getTime()) {
         ContainerStatus status =
           SchedulerUtils.createPreemptedContainerStatus(
@@ -453,12 +467,13 @@ public class FairScheduler extends
 
         // TODO: Not sure if this ever actually adds this to the list of cleanup
         // containers on the RMNode (see SchedulerNode.releaseContainer()).
-        completedContainer(container, status, RMContainerEventType.KILL);
+        completedContainer(container, status, RMContainerEventType.KILL); //执行清理工作
         LOG.info("Killing container" + container +
             " (after waiting for premption for " +
             (getClock().getTime() - time) + "ms)");
       }
     } else {
+    	//把这个container标记为可能被抢占，也就是所谓的container警告，在下一轮或者几轮，都会拿出这个container判断是否超过了maxWaitTimeBeforeKill，如果超过了，则可以直接杀死了。
       // track the request in the FSAppAttempt itself
       app.addPreemption(container, getClock().getTime());
     }

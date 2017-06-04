@@ -72,12 +72,16 @@ public class FairSharePolicy extends SchedulingPolicy {
     public int compare(Schedulable s1, Schedulable s2) {
       double minShareRatio1, minShareRatio2;
       double useToWeightRatio1, useToWeightRatio2;
+      //s1最小资源需求和需要的资源的较小值
       Resource minShare1 = Resources.min(RESOURCE_CALCULATOR, null,
           s1.getMinShare(), s1.getDemand());
+      //s2最小资源需求和需要的资源的较小值
       Resource minShare2 = Resources.min(RESOURCE_CALCULATOR, null,
           s2.getMinShare(), s2.getDemand());
+      //s1已经使用的资源是否小于 minShare1
       boolean s1Needy = Resources.lessThan(RESOURCE_CALCULATOR, null,
           s1.getResourceUsage(), minShare1);
+     //s1已经使用的资源是否小于 minShare2
       boolean s2Needy = Resources.lessThan(RESOURCE_CALCULATOR, null,
           s2.getResourceUsage(), minShare2);
       minShareRatio1 = (double) s1.getResourceUsage().getMemory()
@@ -89,11 +93,11 @@ public class FairSharePolicy extends SchedulingPolicy {
       useToWeightRatio2 = s2.getResourceUsage().getMemory() /
           s2.getWeights().getWeight(ResourceType.MEMORY);
       int res = 0;
-      if (s1Needy && !s2Needy)
+      if (s1Needy && !s2Needy)//如果s1资源欠缺而s2资源充裕
         res = -1;
-      else if (s2Needy && !s1Needy)
+      else if (s2Needy && !s1Needy)//如果s1资源充足而s2资源欠缺
         res = 1;
-      else if (s1Needy && s2Needy)
+      else if (s1Needy && s2Needy)//如果他们都处于资源欠缺状态
         res = (int) Math.signum(minShareRatio1 - minShareRatio2);
       else
         // Neither schedulable is needy

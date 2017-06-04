@@ -794,17 +794,20 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
   }
 
   /**
-   * Preempt a running container according to the priority
+   * 根据优先级，从application的所有container中选择一个container用来被抢占
    */
   @Override
   public RMContainer preemptContainer() {
+	
     if (LOG.isDebugEnabled()) {
       LOG.debug("App " + getName() + " is going to preempt a running " +
           "container");
     }
 
     RMContainer toBePreempted = null;
+    //获取自己所有的running container
     for (RMContainer container : getLiveContainers()) {
+    //使用比较器RMContainerComparator选择出一个最应该被抢占的container
       if (!getPreemptionContainers().contains(container) &&
           (toBePreempted == null ||
               comparator.compare(toBePreempted, container) > 0)) {
