@@ -108,6 +108,34 @@ public class ComputeFairShares {
    * because resourceUsedWithWeightToResourceRatio is linear-time and the number of
    * iterations of binary search is a constant (dependent on desired precision).
    */
+  /**
+   * 给出一系列的Schedulable,在预先规定了各个Schedulable的minShare和maxShare的情况下，
+   * 我们的目的，就是根据minShare和maxShare,综合整个集群的全体资源，为各个Schedulable进行最公平
+   * 的分配。
+   * 为了理解这种分配策略，我们必须理解，在给定minShare和maxShare的前提下，加权的公平分配代表什么：
+   * 如果没有minShare和maxShare，那么所有Schedulable权重相同，它们通过*均分*集群资源得到属于自
+   * 己的fair share。但是当每个队列有了不同的minShare和maxShare,那么权重就各不相同了，最终可能
+   * 有些队列分得的fairShare小于自己的minShare，有些队列分得的fairShare大于自己的maxShare。
+   * 为了处理这种可能性，我们假定如果存在这样一个R值，并满足一下条件，那么就可以认为已经做到了公平分配：
+   * 对于一个Schedulable S，如果它的minShare > R * S.weight，那么这个Schedulable被分配的fair 
+   * share 是它的minShare,并且，如果它的maxShare < R * S.weight ,那么这个Schedulable被分配
+   * 的fairShare是它的maxShare。其它的Schedulable被分配的资源是R * S.weight。总体资源之和是
+   * 总资源。
+   * 我们把R叫做资源权重比值，因为它把一个Schedulable的权重转换成为了Schedulable实际分配到的资源。
+   * 我们计算一个Schedulable，就是通过找到一个合适的资源权重比（R）来进行的。我们通过二分查找来得到R。
+   * 给出一个R的启动值，我们计算总体使用资源，如果这个总体使用资源小于总资源，那么R太小了，需要增大；相反，
+   * R太大了， 需要减小。
+   * 开始二分查找前，我们设定R的下限值和上限值， 下限值为0，意味着所有的Schedulable都只能分配到自己的
+   * minShare的资源，上限值则被设置为足够大以至于所有的Scheduler得到的资源已经大于集群总资源（通过将
+   * R从1开始不断翻倍直到所有Schedulable分配到的资源大于集群总资源）。从上述规则我们知道，如果R=0,
+   * 意味着所有的Schedulable都只被分配自己的minShare
+   * (Yarn规定，在 fair-scheduler.xml中配置的所有Schedulable的minShare之和必须小于Yarn的所有
+   * NodeManager的资源之和，否则fair-scheduler不生效)。
+   * @param allSchedulables
+   * @param totalResources
+   * @param type
+   * @param isSteadyShare
+   */
   private static void computeSharesInternal(
       Collection<? extends Schedulable> allSchedulables,
       Resource totalResources, ResourceType type, boolean isSteadyShare) {
@@ -120,6 +148,8 @@ public class ComputeFairShares {
     if (schedulables.isEmpty()) {
       return;
     }
+    //找到一个我们准备用在二分查找的R的上限值，我们将R初始化为1，然后每次翻倍，直到所有的Schedulable
+    //已经用完了所有的资源或者所有Schedulables已经达到了自己的maxShare
     // Find an upper bound on R that we can use in our binary search. We start
     // at R = 1 and double it until we have either used all the resources or we
     // have met all Schedulables' max shares.
@@ -133,7 +163,7 @@ public class ComputeFairShares {
       }
     }
 
-    //集群总资源，减去 已经计算完毕的fix队列的资源，得到剩下的non-fix的资源总量
+    //集群总资源，减去 已经计算完毕的fix队列的资源，得到剩下的non-fix的资源总量，这一部分资源，是可分配的资源
     int totalResource = Math.max((getResourceValue(totalResources, type) -
         takenResources), 0);
     //所有non-fix队列的maxShare加起来小于 totalResource（集群总资源减去fix队列资源量的和的剩余值）,则只需要所有maxShare的和就可以了，否则，需要totalResuorce（集群总资源减去fix队列资源量的和的剩余值）
@@ -145,6 +175,7 @@ public class ComputeFairShares {
       rMax *= 2.0;
     }
     //获取了一个最大值，可以在0和这个最大值之间进行二分查找了。二分查找结束以后，right 值就几乎逼近了non fix队列的可用资源值
+    //为了防止无限迭代下去，设置COMPUTE_FAIR_SHARES_ITERATIONS限制迭代
     // Perform the binary search for up to COMPUTE_FAIR_SHARES_ITERATIONS steps
     double left = 0;
     double right = rMax;
@@ -208,6 +239,16 @@ public class ComputeFairShares {
    * Returns the resources taken by fixed fairshare schedulables,
    * and adds the remaining to the passed nonFixedSchedulables.
    */
+  /**
+   * 计算fixed-schedulable的固定资源,fix-schedulable的资源不具有动态性，
+   * 因此可以直接进行计算。那么，什么叫做fixed-schedulable呢：
+   * 可以参考getFairShareIfFixed()方法的注解。
+   * @param schedulables
+   * @param nonFixedSchedulables
+   * @param isSteadyShare
+   * @param type
+   * @return
+   */
   private static int handleFixedFairShares(
       Collection<? extends Schedulable> schedulables,
       Collection<Schedulable> nonFixedSchedulables,
@@ -217,11 +258,15 @@ public class ComputeFairShares {
     for (Schedulable sched : schedulables) {
       //如果是一个fixed队列，则fixedShare为该队列的minShare或者0
       int fixedShare = getFairShareIfFixed(sched, isSteadyShare, type);
-      if (fixedShare < 0) {//不是fixed，即maxShare 和weight不是0， 并且这个Schedulable是一个active的
-        nonFixedSchedulables.add(sched);//将nonFixed队列放入nonFixedSchedulables中返回
+      if (fixedShare < 0) {
+    	//不是fixed，即maxShare 和weight不是0， 并且这个Schedulable是一个active的
+    	//则将这个Schedulable保存在nonFixedSchedulables中返回
+        nonFixedSchedulables.add(sched);
       } else {
-    	 //maxResources小于等于0  weight小于等于0 ,当求FairShare时，如果队列是非active时
-    	  //如果是fix队列，则将其steady fair share 或者 fair share设置为fixedShare
+    	//如果是fix队列，那么分两种情况：
+    	// 如果isSteadyShare=true,即我们计算的是steady fairshares,则将其steady fair share设置为fixedShare
+    	// 如果isSteadyShare=false,即我们计算的instaneous fair share,则将这个Schedulable的fairShare(
+    	//即instaneous fair share)设置为fixedShare
         setResourceValue(fixedShare,
             isSteadyShare
                 ? ((FSQueue)sched).getSteadyFairShare()
@@ -231,6 +276,7 @@ public class ComputeFairShares {
             Integer.MAX_VALUE);
       }
     }
+    //返回我们计算得到的所有的 fix-schedulable的资源之和
     return totalResource;
   }
 
@@ -239,6 +285,13 @@ public class ComputeFairShares {
    *
    * The fairshare is fixed if either the maxShare is 0, weight is 0,
    * or the Schedulable is not active for instantaneous fairshare.
+   * 如果这个Schedulable是一个fixed schedulable，则返回这个fixed-sheculable的资源份额。
+   * fixed-schedulable的定义是：
+   * 这个Schedulbale的maxShare <=0
+   * 或者
+   * 当求instantaneous fair share, 并且这个队列是非活跃队列
+   * 或者
+   * weight <= 0
    */
   private static int getFairShareIfFixed(Schedulable sched,
       boolean isSteadyShare, ResourceType type) {
@@ -250,6 +303,10 @@ public class ComputeFairShares {
     }
 
     // For instantaneous fairshares, check if queue is active
+    //isSteadyShare为true,代表我们计算的是steady share,此时不区分这个队列
+    //是不是active的， 但是如果isSteadyShare 是false，代表我们目前计算的
+    //是instantaneous fairshares，此时，只要队列不是活跃的，就认为是
+    //fix-schedulable
     if (!isSteadyShare &&
         (sched instanceof FSQueue) && !((FSQueue)sched).isActive()) {
       return 0;
@@ -261,8 +318,8 @@ public class ComputeFairShares {
       int minShare = getResourceValue(sched.getMinShare(), type);
       return (minShare <= 0) ? 0 : minShare;
     }
-
-    return -1;//这个队列maxShare大于0 并且（isSteadyShare = true 或者 队列是活跃的 ）并且  weight > 0, 则返回 -1
+    //这个队列maxShare大于0 并且（isSteadyShare = true 或者 队列是活跃的 ）并且  weight > 0, 则返回 -1,代表这不是一个fixed-schedulable
+    return -1;
   }
 
   private static int getResourceValue(Resource resource, ResourceType type) {
