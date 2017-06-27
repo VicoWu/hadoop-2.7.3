@@ -132,9 +132,10 @@ import com.google.protobuf.Message.Builder;
 /** An abstract IPC service.  IPC calls take a single {@link Writable} as a
  * parameter, and return a {@link Writable} as their value.  A service runs on
  * a port and is defined by a parameter class and a value class.
- * 
+ * ipc.Server的实现类是RPC.Server
  * @see Client
  */
+
 public abstract class Server {
   private final boolean authorize;
   private List<AuthMethod> enabledAuthMethods;

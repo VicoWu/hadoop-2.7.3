@@ -313,8 +313,12 @@ public abstract class ZKFailoverController {
     healthMonitor.start();
   }
   
+  /**
+   * 初始化作为RPC Server的ZKFC Service
+   * @throws IOException
+   */
   protected void initRPC() throws IOException {
-    InetSocketAddress bindAddr = getRpcAddressToBindTo();
+    InetSocketAddress bindAddr = getRpcAddressToBindTo();//调用实现类DFSZKFailoverController.getRpcAddressToBindTo
     rpcServer = new ZKFCRpcServer(conf, bindAddr, this, getPolicyProvider());
   }
 
