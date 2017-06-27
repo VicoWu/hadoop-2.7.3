@@ -113,10 +113,17 @@ public class DFSZKFailoverController extends ZKFailoverController {
         DFSConfigKeys.DFS_HA_ZKFC_PORT_DEFAULT);
   }
   
+  /**
+   * 在DFSZKFailoverController的main方法中被调用
+   * @param conf
+   * @return
+   */
   public static DFSZKFailoverController create(Configuration conf) {
     Configuration localNNConf = DFSHAAdmin.addSecurityConfiguration(conf);
+    //获取我们dfs.nameservices的配置值
     String nsId = DFSUtil.getNamenodeNameServiceId(conf);
 
+    //检查配置文件中ZKFC是否打开
     if (!HAUtil.isHAEnabled(localNNConf, nsId)) {
       throw new HadoopIllegalArgumentException(
           "HA is not enabled for this namenode.");
@@ -165,6 +172,12 @@ public class DFSZKFailoverController extends ZKFailoverController {
     return localNNTarget.getNameServiceId();
   }
 
+  /**
+   * 当我们打开ZKFC功能，会在每一个NameNode节点上创建一个java进程，
+   * 主函数就是DFSZKFailoverController
+   * @param args
+   * @throws Exception
+   */
   public static void main(String args[])
       throws Exception {
     if (DFSUtil.parseHelpArgument(args, 
@@ -178,6 +191,7 @@ public class DFSZKFailoverController extends ZKFailoverController {
         parser.getConfiguration());
     int retCode = 0;
     try {
+      //实际上调用ZKFailoverControler.run()方法
       retCode = zkfc.run(parser.getRemainingArgs());
     } catch (Throwable t) {
       LOG.fatal("Got a fatal error, exiting now", t);
