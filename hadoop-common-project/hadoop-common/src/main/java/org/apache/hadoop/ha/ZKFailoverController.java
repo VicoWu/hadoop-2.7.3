@@ -185,6 +185,15 @@ public abstract class ZKFailoverController {
   }
   
 
+  /**
+   * 这是ZKFC进程main方法中调用的主要方法，用来初始化与ZK之间的连接、初始化ZKFC需要使用的目录结构
+   * 同时，创建作为RPC Server端的ZKFC Service
+   * @param args
+   * @return
+   * @throws HadoopIllegalArgumentException
+   * @throws IOException
+   * @throws InterruptedException
+   */
   private int doRun(String[] args)
       throws HadoopIllegalArgumentException, IOException, InterruptedException {
     try {
@@ -231,11 +240,11 @@ public abstract class ZKFailoverController {
       return ERR_CODE_NO_FENCER;
     }
 
-    initRPC();
-    initHM();
-    startRPC();
+    initRPC();//初始化作为RPC Server的ZKFC Service
+    initHM();//初始化HealthMonitor
+    startRPC();//启动作为RPC Server的ZKFC Service
     try {
-      mainLoop();
+      mainLoop();//一个无线等待，直到代码抛出了fatal error则退出，整个的ZKFC进程退出
     } finally {
       rpcServer.stopAndJoin();
       

@@ -78,7 +78,7 @@ public abstract class HAServiceTarget {
     confCopy.setInt(CommonConfigurationKeysPublic.IPC_CLIENT_CONNECT_MAX_RETRIES_KEY, 1);
     SocketFactory factory = NetUtils.getDefaultSocketFactory(confCopy);
     return new HAServiceProtocolClientSideTranslatorPB(
-        getAddress(),
+        getAddress(),//获取远程RPC Server的地址，需要有抽象类的具体实现去决定
         confCopy, factory, timeoutMs);
   }
   

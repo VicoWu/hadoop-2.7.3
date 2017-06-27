@@ -71,9 +71,18 @@ public class HAServiceProtocolClientSideTranslatorPB implements
         RPC.getProtocolVersion(HAServiceProtocolPB.class), addr, conf);
   }
   
+  /**
+   * 创建HA Server的客户端，对应的协议文件是HAServiceProtocol.proto
+   * @param addr RPC server的地址
+   * @param conf
+   * @param socketFactory
+   * @param timeout
+   * @throws IOException
+   */
   public HAServiceProtocolClientSideTranslatorPB(
       InetSocketAddress addr, Configuration conf,
       SocketFactory socketFactory, int timeout) throws IOException {
+	//使用protobuf作为RPC协议，即使用ProtobufRPCEngine作为RPC引擎
     RPC.setProtocolEngine(conf, HAServiceProtocolPB.class,
         ProtobufRpcEngine.class);
     rpcProxy = RPC.getProxy(HAServiceProtocolPB.class,

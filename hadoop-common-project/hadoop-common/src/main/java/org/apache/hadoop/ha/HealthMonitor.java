@@ -63,6 +63,7 @@ public class HealthMonitor {
   private HAServiceProtocol proxy;
 
   /** The HA service to monitor */
+  //在针对NameNode的zkfc中，HAServiceTarget的实现类是NNHAServiceTarget
   private final HAServiceTarget targetToMonitor;
 
   private final Configuration conf;
@@ -190,16 +191,29 @@ public class HealthMonitor {
   /**
    * Connect to the service to be monitored. Stubbed out for easier testing.
    */
+  /**
+   * HealthMonitor作为RPC客户端，创建一个到远程RPCServer的客户端代理。这里
+   * 的Server，实际上就是对应节点的NameNode
+   * @return
+   * @throws IOException
+   */
   protected HAServiceProtocol createProxy() throws IOException {
+	//targetToMonitor
     return targetToMonitor.getProxy(conf, rpcTimeout);
   }
 
+  /**
+   * 状态价差
+   * @throws InterruptedException
+   */
   private void doHealthChecks() throws InterruptedException {
     while (shouldRun) {
       HAServiceStatus status = null;
       boolean healthy = false;
       try {
+    	//HAServiceProtocolClientSideTranslatorPB.getServiceStatus()
         status = proxy.getServiceStatus();
+        //HAServiceProtocolClientSideTranslatorPB.monitorHealth()
         proxy.monitorHealth();
         healthy = true;
       } catch (Throwable t) {
@@ -276,6 +290,11 @@ public class HealthMonitor {
     daemon.start();
   }
 
+  /**
+   * 在HealthMonitor中维护了一个MonitorDaemon，用来不断进行状态检查
+   * @author wuchang
+   *
+   */
   private class MonitorDaemon extends Daemon {
     private MonitorDaemon() {
       super();
