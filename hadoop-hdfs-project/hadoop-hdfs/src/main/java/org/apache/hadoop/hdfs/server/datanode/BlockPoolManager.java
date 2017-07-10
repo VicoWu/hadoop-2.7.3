@@ -196,7 +196,8 @@ class BlockPoolManager {
       if (!toAdd.isEmpty()) {
         LOG.info("Starting BPOfferServices for nameservices: " +
             Joiner.on(",").useForNull("<default>").join(toAdd));
-      
+      //toAdd中存放了配置的NameNodeService，
+        //根据从配置文件中读取到的NameNodeList，创建BPOfferService对象，与NameNode一一对应
         for (String nsToAdd : toAdd) {
           ArrayList<InetSocketAddress> addrs =
             Lists.newArrayList(addrMap.get(nsToAdd).values());

@@ -823,6 +823,10 @@ public class FairScheduler extends
 
   /**
    * Clean up a completed container.
+   * 对已经完成工作的container执行清理操作
+   * 这发生在ApplicationMaster通过ApplicationMasterProcotol 协议告知ApplicationMasterService
+   * 已经完成的container，ApplicationMasterService负责对这些container进行释放
+   * 当进行资源释放的时候event是RMContainerEventType.RELEASED
    */
   @Override
   protected synchronized void completedContainer(RMContainer rmContainer,
@@ -912,6 +916,10 @@ public class FairScheduler extends
         " cluster capacity: " + clusterResource);
   }
 
+  /**
+   * 这个方法会在ApplicationMasterService中调用
+   * 当ApplicationMaster向AMS发起资源请求，AMS则会调用具体的Scheduler来进行资源的分配
+   */
   @Override
   public Allocation allocate(ApplicationAttemptId appAttemptId,
       List<ResourceRequest> ask, List<ContainerId> release,
@@ -930,12 +938,14 @@ public class FairScheduler extends
         clusterResource, minimumAllocation, getMaximumResourceCapability(),
         incrAllocation);
 
+    //为ApplicationMaster本身设置资源
     // Set amResource for this app
     if (!application.getUnmanagedAM() && ask.size() == 1
         && application.getLiveContainers().isEmpty()) {
       application.setAMResource(ask.get(0).getCapability());
     }
 
+    //将请求释放的资源进行释放操作
     // Release containers
     releaseContainers(release, application);
 
@@ -949,6 +959,7 @@ public class FairScheduler extends
         application.showRequests();
 
         // Update application requests
+        //更新
         application.updateResourceRequests(ask);
 
         application.showRequests();
@@ -965,6 +976,8 @@ public class FairScheduler extends
       }
       
       Set<ContainerId> preemptionContainerIds = new HashSet<ContainerId>();
+      //查看FSAppAttempt.getPreemptionContainers(),即strictContainers
+      //每个application的preemptionContainer是对应的scheduler如FairScheduler进行资源抢占的时候设置的
       for (RMContainer container : application.getPreemptionContainers()) {
         preemptionContainerIds.add(container.getContainerId());
       }

@@ -63,8 +63,11 @@ public class AppSchedulingInfo {
   private final AtomicLong containerIdCounter;
   private final int EPOCH_BIT_SHIFT = 40;
 
+  //一个排序的HashSet,用来保存当前这个applicaiton的所有请求的优先级
   final Set<Priority> priorities = new TreeSet<Priority>(
       new org.apache.hadoop.yarn.server.resourcemanager.resource.Priority.Comparator());
+  
+  //优先级和请求的对应关系，每一个优先级对应了多个请求 (priority: (resourceName : request))
   final Map<Priority, Map<String, ResourceRequest>> requests =
     new ConcurrentHashMap<Priority, Map<String, ResourceRequest>>();
   private Set<String> blacklist = new HashSet<String>();
@@ -135,11 +138,13 @@ public class AppSchedulingInfo {
     
     // Update resource requests
     for (ResourceRequest request : requests) {
-      Priority priority = request.getPriority();
-      String resourceName = request.getResourceName();
+      Priority priority = request.getPriority();//请求的优先级
+      String resourceName = request.getResourceName(); //资源名称，一般是指hostname
       boolean updatePendingResources = false;
       ResourceRequest lastRequest = null;
 
+      //resourceName是资源请求的目标服务器，如果为ResourceRequest.ANY，则代表这次资源请求
+      //对资源运行所在的服务器没有特殊要求，任何服务器均可以
       if (resourceName.equals(ResourceRequest.ANY)) {
         if (LOG.isDebugEnabled()) {
           LOG.debug("update:" + " application=" + applicationId + " request="
@@ -158,18 +163,21 @@ public class AppSchedulingInfo {
         }
       }
 
+      //this.requests保留了这个applicaiton当前优先级对应的所有请求
       Map<String, ResourceRequest> asks = this.requests.get(priority);
 
-      if (asks == null) {
+      if (asks == null) {//还没有对应优先级的请求，则新建对应的map
         asks = new ConcurrentHashMap<String, ResourceRequest>();
         this.requests.put(priority, asks);
         this.priorities.add(priority);
       }
+      //lastRequest中存放了上一次对应优先级、对应机架和host上的资源请求
       lastRequest = asks.get(resourceName);
 
       if (recoverPreemptedRequest && lastRequest != null) {
         // Increment the number of containers to 1, as it is recovering a
         // single container.
+    	 //这个请求是在请求恢复某一个被强占的container资源
         request.setNumContainers(lastRequest.getNumContainers() + 1);
       }
 
@@ -188,7 +196,7 @@ public class AppSchedulingInfo {
         Resource lastRequestCapability = lastRequest != null ? lastRequest
             .getCapability() : Resources.none();
         metrics.incrPendingResources(user, request.getNumContainers(),
-            request.getCapability());
+            request.getCapability());//request.getCapability()是指这个请求中每一个container的资源量
         metrics.decrPendingResources(user, lastRequestContainers,
             lastRequestCapability);
       }

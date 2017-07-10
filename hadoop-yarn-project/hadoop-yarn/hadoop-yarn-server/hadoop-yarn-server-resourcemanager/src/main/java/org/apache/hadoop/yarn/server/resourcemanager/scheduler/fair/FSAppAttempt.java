@@ -113,6 +113,12 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     return queue.getMetrics();
   }
 
+  /**
+   * 用于资源释放
+   * @param rmContainer
+   * @param containerStatus
+   * @param event RMContainerEventType.RELEASED
+   */
   synchronized public void containerCompleted(RMContainer rmContainer,
       ContainerStatus containerStatus, RMContainerEventType event) {
     
@@ -123,6 +129,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     newlyAllocatedContainers.remove(rmContainer);
     
     // Inform the container
+    //rmContainer 是RM端的container抽象，实现类是RMContainerImpl
     rmContainer.handle(
         new RMContainerFinishedEvent(
             containerId,
@@ -140,6 +147,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
         getApplicationId(), containerId);
     
     // Update usage metrics 
+    //更新队列的metrics信息，将这个释放的container的资源从当前占用资源中去除
     Resource containerResource = rmContainer.getContainer().getResource();
     queue.getMetrics().releaseResources(getUser(), 1, containerResource);
     Resources.subtractFrom(currentConsumption, containerResource);

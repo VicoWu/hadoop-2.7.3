@@ -242,6 +242,7 @@ public class RMContextImpl implements RMContext {
     }
   }
 
+  //在ResourceManager.serviceInit()中设置dispatcher，是一个AsyncDispatcher
   void setDispatcher(Dispatcher dispatcher) {
     this.rmDispatcher = dispatcher;
   }

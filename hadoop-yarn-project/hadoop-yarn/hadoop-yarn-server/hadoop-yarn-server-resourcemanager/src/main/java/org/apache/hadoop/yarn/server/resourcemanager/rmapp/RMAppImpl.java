@@ -525,6 +525,7 @@ public class RMAppImpl implements RMApp, Recoverable {
     throw new YarnRuntimeException("Unknown state passed!");
   }
 
+  //将最新的节点信息更新到updatedNodes中
   @Override
   public int pullRMNodeUpdates(Collection<RMNode> updatedNodes) {
     this.writeLock.lock();
@@ -761,9 +762,12 @@ public class RMAppImpl implements RMApp, Recoverable {
       transferStateFromPreviousAttempt));
   }
 
+  //这个方法在RMAppNodeUpdateTransition.transition()中被调用，这是一个状态机转换
+  //从RMAppImpl的定义中可以看到，这个转换发生于 RMAppEventType.NODE_UPDATE事件发生的时候，
+  //NodeUpdate事件发生的具体情况，可以看NodeListManager.handle()
   private void processNodeUpdate(RMAppNodeUpdateType type, RMNode node) {
     NodeState nodeState = node.getState();
-    updatedNodes.add(node);
+    updatedNodes.add(node);//由于updatedNodes是一个Set，因此add()其实是一个更新操作，更新这个Application的Node信息，
     LOG.debug("Received node update event:" + type + " for node:" + node
         + " with state:" + nodeState);
   }

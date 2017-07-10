@@ -502,7 +502,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
           new ApplicationEventDispatcher(rmContext));
 
       // Register event handler for RmAppAttemptEvents
-      //将RmAppAttemptEvents交给RMAppAttempt去维护，其实现类是RMAppAttemptImpl
+      //将RmAppAttemptEvent交给RMAppAttempt去维护，其实现类是RMAppAttemptImpl
       rmDispatcher.register(RMAppAttemptEventType.class,
           new ApplicationAttemptEventDispatcher(rmContext));
 
@@ -813,13 +813,19 @@ public class ResourceManager extends CompositeService implements Recoverable {
 
     @Override
     public void handle(RMAppAttemptEvent event) {
+      //从事件对象中取出attemptid对象
       ApplicationAttemptId appAttemptID = event.getApplicationAttemptId();
+      //取出对应的application信息
       ApplicationId appAttemptId = appAttemptID.getApplicationId();
+      //通过applicationId信息取出对应的服务器端Appliatoin信息
       RMApp rmApp = this.rmContext.getRMApps().get(appAttemptId);
+      
       if (rmApp != null) {
+    	 //一个Applicaiton由一个活着多个attempt信息，根据attemptid取出这个attempt
         RMAppAttempt rmAppAttempt = rmApp.getRMAppAttempt(appAttemptID);
         if (rmAppAttempt != null) {
           try {
+        	//调用这个attempt即RMAppAttemptImpl.handle()
             rmAppAttempt.handle(event);
           } catch (Throwable t) {
             LOG.error("Error in handling event type " + event.getType()

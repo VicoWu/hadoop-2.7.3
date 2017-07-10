@@ -406,6 +406,7 @@ public class SchedulerApplicationAttempt {
           LOG.debug("showRequests:" + " application=" + getApplicationId() + 
               " headRoom=" + getHeadroom() + 
               " currentConsumption=" + currentConsumption.getMemory());
+          //对于该优先级的所有请求，打印request
           for (ResourceRequest request : requests.values()) {
             LOG.debug("showRequests:" + " application=" + getApplicationId()
                 + " request=" + request);

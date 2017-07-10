@@ -351,9 +351,11 @@ public class QueueMetrics implements MetricsSource {
     _incrPendingResources(containers, res);
     QueueMetrics userMetrics = getUserMetrics(user);
     if (userMetrics != null) {
+      //更新请求用户的资源度量
       userMetrics.incrPendingResources(user, containers, res);
     }
     if (parent != null) {
+      //更新请求用户的资源度量
       parent.incrPendingResources(user, containers, res);
     }
   }
@@ -371,6 +373,7 @@ public class QueueMetrics implements MetricsSource {
       userMetrics.decrPendingResources(user, containers, res);
     }
     if (parent != null) {
+      //递归，逐步更新父节点的资源信息
       parent.decrPendingResources(user, containers, res);
     }
   }
@@ -418,13 +421,19 @@ public class QueueMetrics implements MetricsSource {
     }
   }
 
+  /**
+   * 某个container被释放，则这个方法会被调用以更新队列的metrics信息
+   * @param user
+   * @param containers container个数
+   * @param res 资源量
+   */
   public void releaseResources(String user, int containers, Resource res) {
     allocatedContainers.decr(containers);
     aggregateContainersReleased.incr(containers);
     allocatedMB.decr(res.getMemory() * containers);
     allocatedVCores.decr(res.getVirtualCores() * containers);
     QueueMetrics userMetrics = getUserMetrics(user);
-    if (userMetrics != null) {
+    if (userMetrics != null) {//更新单个用户的资源metric信息
       userMetrics.releaseResources(user, containers, res);
     }
     if (parent != null) {

@@ -28,10 +28,15 @@ import org.apache.hadoop.yarn.api.records.NMToken;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.api.records.ResourceRequest;
 
+/**
+ * Scheduler通过处理资源请求等信息得出的资源分配信息，关于strictContainers和fungibleContainers，可以看PreemptionMessage.java
+ * @author wuchang
+ *
+ */
 public class Allocation {
   
   final List<Container> containers;
-  final Set<ContainerId> strictContainers;
+  final Set<ContainerId> strictContainers;//对应application.getPreemptionContainers()的list
   final Set<ContainerId> fungibleContainers;
   final List<ResourceRequest> fungibleResources;
   final List<NMToken> nmTokens;

@@ -472,9 +472,21 @@ public abstract class AbstractYarnScheduler
   }
 
   // clean up a completed container
+  /**
+   * 在
+   * @param rmContainer
+   * @param containerStatus
+   * @param event RMContainerEventType.RELEASED
+   */
   protected abstract void completedContainer(RMContainer rmContainer,
       ContainerStatus containerStatus, RMContainerEventType event);
 
+  /**
+   * 在FairScheduler.allocate()中被调用，用来将ApplicationMaster申请进行释放的container执行释放操作
+   * @param containers
+   * @param attempt
+   */
+  
   protected void releaseContainers(List<ContainerId> containers,
       SchedulerApplicationAttempt attempt) {
     for (ContainerId containerId : containers) {
@@ -495,6 +507,7 @@ public abstract class AbstractYarnScheduler
             attempt.getApplicationId(), containerId);
         }
       }
+      //实际调用实现类FairScheduler.releaseContainers()
       completedContainer(rmContainer,
         SchedulerUtils.createAbnormalContainerStatus(containerId,
           SchedulerUtils.RELEASED_CONTAINER), RMContainerEventType.RELEASED);
