@@ -521,8 +521,11 @@ public class ApplicationMasterService extends AbstractService implements
       // set label expression for Resource Requests if resourceName=ANY 
       ApplicationSubmissionContext asc = app.getApplicationSubmissionContext();
       for (ResourceRequest req : ask) {
+    	 //ResourceRequest.ANY代表这个资源分派请求对机器不挑剔，集群中任何机器都行
         if (null == req.getNodeLabelExpression()
             && ResourceRequest.ANY.equals(req.getResourceName())) {
+          //如果这个资源请求不挑机器，并且没有设置nodeLabel, 那么就将nodeLabel设置为
+         //客户端提交应用时候指定的nodelabel，当然，有可能客户端提交应用的时候没有指定nodeLabel
           req.setNodeLabelExpression(asc.getNodeLabelExpression());
         }
       }
@@ -583,7 +586,7 @@ public class ApplicationMasterService extends AbstractService implements
       // update the response with the deltas of node status changes
       //设置response中所有节点的信息
       List<RMNode> updatedNodes = new ArrayList<RMNode>();
-      if(app.pullRMNodeUpdates(updatedNodes) > 0) {
+      if(app.pullRMNodeUpdates(updatedNodes) > 0) {//将节点信息放入到updatedNodes中
         List<NodeReport> updatedNodeReports = new ArrayList<NodeReport>();
         for(RMNode rmNode: updatedNodes) {
           SchedulerNodeReport schedulerNodeReport =  
@@ -607,20 +610,22 @@ public class ApplicationMasterService extends AbstractService implements
         allocateResponse.setUpdatedNodes(updatedNodeReports);
       }
 
-      //已经为这个application分配的信息
+      //设置已经为这个application分配的container信息到response中
       allocateResponse.setAllocatedContainers(allocation.getContainers());
-      //已经完成的container的状态
+      //设置已经完成的container的状态信息到response中
       allocateResponse.setCompletedContainersStatuses(appAttempt
           .pullJustFinishedContainers());
-      //responseID自增1
+      //responseID自增1，放到response中
       allocateResponse.setResponseId(lastResponse.getResponseId() + 1);
       
+      //设置集群中可用的资源信息到response中
       allocateResponse.setAvailableResources(allocation.getResourceLimit());
 
-      //集群中可用节点的数目
+      //设置集群中可用节点的数目信息到response中
       allocateResponse.setNumClusterNodes(this.rScheduler.getNumClusterNodes());
 
       // add preemption to the allocateResponse message (if any)
+      //设置抢占信息到response中
       allocateResponse
           .setPreemptionMessage(generatePreemptionMessage(allocation));
 
@@ -711,7 +716,8 @@ public class ApplicationMasterService extends AbstractService implements
     return pMsg;
   }
 
-  //RM端维护的ApplicationMaster attemp信息
+  //RM端维护的ApplicationMaster attempt信息
+ 
   public void registerAppAttempt(ApplicationAttemptId attemptId) {
     AllocateResponse response =
         recordFactory.newRecordInstance(AllocateResponse.class);

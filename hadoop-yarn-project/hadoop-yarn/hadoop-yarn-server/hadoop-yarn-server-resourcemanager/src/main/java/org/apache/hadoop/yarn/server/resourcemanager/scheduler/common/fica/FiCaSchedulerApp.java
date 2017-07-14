@@ -257,11 +257,11 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
         new HashSet<ContainerId>(containersToPreempt));
     containersToPreempt.clear();
     Resource tot = Resource.newInstance(0, 0);
-    for(ContainerId c : currentContPreemption){
+    for(ContainerId c : currentContPreemption){ //计算当前抢占的container的资源之和
       Resources.addTo(tot,
           liveContainers.get(c).getContainer().getResource());
     }
-    int numCont = (int) Math.ceil(
+    int numCont = (int) Math.ceil(//用container资源之和，除以资源最小分配量，得到container数量
         Resources.divide(rc, clusterResource, tot, minimumAllocation));
     ResourceRequest rr = ResourceRequest.newInstance(
         Priority.UNDEFINED, ResourceRequest.ANY,

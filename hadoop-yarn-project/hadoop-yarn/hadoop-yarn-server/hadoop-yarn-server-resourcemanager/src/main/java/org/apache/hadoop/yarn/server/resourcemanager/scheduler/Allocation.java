@@ -34,12 +34,19 @@ import org.apache.hadoop.yarn.api.records.ResourceRequest;
  *
  */
 public class Allocation {
-  
+	//分配给对应ApplicationMaster的资源
   final List<Container> containers;
-  final Set<ContainerId> strictContainers;//对应application.getPreemptionContainers()的list
+//严格抢占的container,这些container当前还没有被抢占，只是标记为被强占，这些container在真正被强占前通过response告知AM
+  //方便AM保存现场等操作，一旦超过指定时间，这些container就会被抢占和回收
+  final Set<ContainerId> strictContainers;
+  //灵活抢占的container，这些container也被标记为被抢占，但是，还有回旋余地，如果fungibleResources中描述的资源请求能够
+  //被满足，则fungibleContainers不会被抢占
   final Set<ContainerId> fungibleContainers;
+  //如果fungibleResources中描述的资源能够被这个AppliationMaster返回给ResourceManager，那么fungibleContainers就不会被抢占
   final List<ResourceRequest> fungibleResources;
+  //NodeManager的token信息，相当于RM授权对应的AM访问对应的节点以创建container等
   final List<NMToken> nmTokens;
+  //资源限制，理解为真正可以被这个ApplicationMaster使用的剩余资源
   private Resource resourceLimit;
 
   public Allocation(List<Container> containers, Resource resourceLimit,

@@ -198,12 +198,14 @@ public class SchedulerUtils {
 
     // if queue has default label expression, and RR doesn't have, use the
     // default label expression of queue
+    //如果这个resReq中没有nodelabel，并且对机器不挑剔，而且所请求的队列有label，则
+    //直接把请求的label设置为所在队列的label
     if (labelExp == null && queueInfo != null && ResourceRequest.ANY
         .equals(resReq.getResourceName())) {
       labelExp = queueInfo.getDefaultNodeLabelExpression();
     }
 
-    // If labelExp still equals to null, set it to be NO_LABEL
+    //如果还是没有nodeLabel，则规范化为RMNodeLabelsManager.NO_LABEL
     if (labelExp == null) {
       labelExp = RMNodeLabelsManager.NO_LABEL;
     }
@@ -263,6 +265,7 @@ public class SchedulerUtils {
   private static void validateResourceRequest(ResourceRequest resReq,
       Resource maximumResource, QueueInfo queueInfo, RMContext rmContext)
       throws InvalidResourceRequestException {
+	//判断请求中的内存为非负数并且小于最大资源量
     if (resReq.getCapability().getMemory() < 0 ||
         resReq.getCapability().getMemory() > maximumResource.getMemory()) {
       throw new InvalidResourceRequestException("Invalid resource request"
@@ -271,6 +274,7 @@ public class SchedulerUtils {
           + ", requestedMemory=" + resReq.getCapability().getMemory()
           + ", maxMemory=" + maximumResource.getMemory());
     }
+  //判断请求中的vCPU为非负数并且小于最大资源量 
     if (resReq.getCapability().getVirtualCores() < 0 ||
         resReq.getCapability().getVirtualCores() >
         maximumResource.getVirtualCores()) {
@@ -284,6 +288,7 @@ public class SchedulerUtils {
     String labelExp = resReq.getNodeLabelExpression();
 
     // we don't allow specify label expression other than resourceName=ANY now
+    //不允许在resourceName != ANY的情况下指定nodelabel，现在还不支持如此
     if (!ResourceRequest.ANY.equals(resReq.getResourceName())
         && labelExp != null && !labelExp.trim().isEmpty()) {
       throw new InvalidResourceRequestException(
@@ -293,6 +298,7 @@ public class SchedulerUtils {
               + resReq.getResourceName());
     }
     
+    //不允许通过&&连接符指定多个nodelabel
     // we don't allow specify label expression with more than one node labels now
     if (labelExp != null && labelExp.contains("&&")) {
       throw new InvalidResourceRequestException(
@@ -302,6 +308,7 @@ public class SchedulerUtils {
               + labelExp);
     }
     
+    //确保请求中的nodelabel属于队列的nodelabel，并且，保证请求中的nodelabel是集群允许的
     if (labelExp != null && !labelExp.trim().isEmpty() && queueInfo != null) {
       if (!checkQueueLabelExpression(queueInfo.getAccessibleNodeLabels(),
           labelExp, rmContext)) {
