@@ -83,7 +83,7 @@ import com.google.protobuf.ServiceException;
 @Private
 public class ResourceManagerAdministrationProtocolPBServiceImpl implements ResourceManagerAdministrationProtocolPB {
 
-  private ResourceManagerAdministrationProtocol real;
+  private ResourceManagerAdministrationProtocol real;//实际上是一个AdminService
   
   public ResourceManagerAdministrationProtocolPBServiceImpl(ResourceManagerAdministrationProtocol impl) {
     this.real = impl;

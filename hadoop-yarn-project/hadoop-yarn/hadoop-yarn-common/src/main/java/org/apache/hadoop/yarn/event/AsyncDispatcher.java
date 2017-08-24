@@ -92,9 +92,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
           // blockNewEvents is only set when dispatcher is draining to stop,
           // adding this check is to avoid the overhead of acquiring the lock
           // and calling notify every time in the normal run of the loop.
-          if (blockNewEvents) {
+          if (blockNewEvents) {//blockNewEvents=true意味着stopService()方法正在被调用
             synchronized (waitForDrained) {
-              if (drained) {
+              if (drained) {//eventQueue中已经没有事件了
                 waitForDrained.notify();
               }
             }

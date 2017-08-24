@@ -308,6 +308,8 @@ import com.google.common.collect.Lists;
  * 3)  block --> machinelist (kept in memory, rebuilt dynamically from reports)
  * 4)  machine --> blocklist (inverted #2)
  * 5)  LRU cache of updated-heartbeat machines
+ * 
+ * 管理了所有的与目录配置相关的一些配置项，负责读取并解析这些配置项，
  ***************************************************/
 @InterfaceAudience.Private
 @Metrics(context="dfs")
@@ -1254,6 +1256,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     LOG.info("Starting services required for standby state");
     if (!getFSImage().editLog.isOpenForRead()) {
       // During startup, we're already open for read.
+    	/**在NameNode启动的时候，会先进入Standby状态，然后开始读取EditLog文件
+    	 * 在 NameNode 启动的时候会进行数据恢复，首先把 FSImage 文件加载到内存中形成文件系统镜像，
+    	 * 然后再把 EditLog 之中 FsImage 的结束事务 id 之后的 EditLog 回放到这个文件系统镜像上
+    	 */
       getFSImage().editLog.initSharedJournalsForRead();
     }
     
@@ -1369,6 +1375,14 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     return ret;
   }
 
+  /**
+   * 获取storage目录
+   * 在NameNode节点上通过配置dfs.namenode.name.dir配置edits和img文件的存储位置
+   * 通过官方文档可以看到，dfs.namenode.edits.dir被自动设置为dfs.namenode.name.dir
+   * @param conf
+   * @param propertyName
+   * @return
+   */
   private static Collection<URI> getStorageDirs(Configuration conf,
                                                 String propertyName) {
     Collection<String> dirNames = conf.getTrimmedStringCollection(propertyName);
@@ -1469,6 +1483,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // rather than the dir in /tmp
     Collection<String> dirNames = conf.getTrimmedStringCollection(
         DFS_NAMENODE_SHARED_EDITS_DIR_KEY);
+    //dfs.namenode.shared.edits.dir 比如：qjournal://node1.example.com:8485;node2.example.com:8485;node3.example.com:8485/mycluster
     return Util.stringCollectionAsURIs(dirNames);
   }
 

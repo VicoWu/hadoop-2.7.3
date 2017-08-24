@@ -1868,6 +1868,8 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
     return StringUtils.getTrimmedStringCollection(valueString);
   }
   
+  
+
   /** 
    * Get the comma delimited values of the <code>name</code> property as 
    * an array of <code>String</code>s, trimmed of the leading and trailing whitespace.
@@ -2863,7 +2865,7 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
   
   /** For debugging.  List non-default properties to the terminal and exit. */
   public static void main(String[] args) throws Exception {
-    new Configuration().writeXml(System.out);
+	 new Configuration().writeXml(System.out);
   }
 
   @Override

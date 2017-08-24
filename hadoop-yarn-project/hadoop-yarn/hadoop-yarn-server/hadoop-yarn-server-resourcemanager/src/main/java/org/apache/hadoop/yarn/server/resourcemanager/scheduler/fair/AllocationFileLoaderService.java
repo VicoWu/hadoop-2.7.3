@@ -188,6 +188,7 @@ public class AllocationFileLoaderService extends AbstractService {
     return allocFile;
   }
   
+  //在FairScheduler.initScheduler()中被调用，运行时是AllocationReloadListener
   public synchronized void setReloadListener(Listener reloadListener) {
     this.reloadListener = reloadListener;
   }
@@ -407,6 +408,7 @@ public class AllocationFileLoaderService extends AbstractService {
     lastSuccessfulReload = clock.getTime();
     lastReloadAttemptFailed = false;
 
+    //是一个AllocationReloadListener
     reloadListener.onReload(info);
   }
   

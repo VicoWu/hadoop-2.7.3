@@ -29,8 +29,8 @@ import org.apache.hadoop.io.DataOutputBuffer;
  * remote journals.
  */
 class QuorumOutputStream extends EditLogOutputStream {
-  private final AsyncLoggerSet loggers;
-  private EditsDoubleBuffer buf;
+  private final AsyncLoggerSet loggers;//使用AsyncLoggerSet来负责将新的editlog发送到远程JournalNode
+  private EditsDoubleBuffer buf;//双缓存技术，可以让一个缓存的数据被flush out的同时，另外一个缓存的数据正在被写入，然后交换角色。
   private final long segmentTxId;
   private final int writeTimeoutMs;
 
@@ -76,7 +76,7 @@ class QuorumOutputStream extends EditLogOutputStream {
 
   @Override
   public void setReadyToFlush() throws IOException {
-    buf.setReadyToFlush();
+    buf.setReadyToFlush();//缓存交换，一个缓存用来flush output，另一个缓存可以继续被用来写入新数据
   }
 
   @Override

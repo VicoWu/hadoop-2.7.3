@@ -636,6 +636,7 @@ public abstract class Server {
               Connection conn = pendingConnections.take();
               conn.channel.register(readSelector, SelectionKey.OP_READ, conn);
             }
+            //阻塞等待，一直到某个channel处于ready状态才会返回
             readSelector.select();
 
             Iterator<SelectionKey> iter = readSelector.selectedKeys().iterator();
@@ -774,6 +775,9 @@ public abstract class Server {
           }
           continue;
         }
+        //将这个封装了对应的SocketChannel的Connection对象attatch到当前这个SelectionKey对象上
+        //这样，如果这个SelectionKey对象对应的Channel有读写事件，就可以从这个SelectionKey上取出
+        //Connection，获取到这个Channel的相关信息
         key.attach(c);  // so closeCurrentConnection can get the object
         //将当前的connection添加给reader的connection队列，reader将会依次从队列中取出连接进行处理
         reader.addConnection(c);
@@ -874,12 +878,14 @@ public abstract class Server {
       while (running) {
         try {
           waitPending();     // If a channel is being registered, wait.
-          writeSelector.select(PURGE_INTERVAL);
+          writeSelector.select(PURGE_INTERVAL);//等待IO处于Ready状态的SelectionKey，有最长等待PURGE_INTERVAL
           Iterator<SelectionKey> iter = writeSelector.selectedKeys().iterator();
           while (iter.hasNext()) {
             SelectionKey key = iter.next();
-            iter.remove();
+            
+            iter.remove();//将这个SelectionKey remove掉，这是NIO的通用操作，防止一个SeletionKey对象被取出多次
             try {
+              //当前这个SelectionKey是可以写的，因此执行异步写操作
               if (key.isValid() && key.isWritable()) {
                   doAsyncWrite(key);
               }
@@ -932,15 +938,20 @@ public abstract class Server {
     }
 
     private void doAsyncWrite(SelectionKey key) throws IOException {
-      Call call = (Call)key.attachment();
+      Call call = (Call)key.attachment();//取出之前attatch到这个SelectionKey对象上的Call对象
       if (call == null) {
         return;
       }
+      //比较Connection中保存的channel与key中的channel。一般这种情况是不可能发生的，
+      //因为在创建这个channel的时候，会用这个channel构造Call对象，然后将Call对象attatch
+      //到这个SelectionKey上，因此，它们的channel必须是同一个channel
       if (key.channel() != call.connection.channel) {
         throw new IOException("doAsyncWrite: bad channel");
       }
 
       synchronized(call.connection.responseQueue) {
+    	 //执行写操作，即把call.connection.responseQueue中的response通过SocketChannel返回给客户端
+    	  //返回true，代表这个connection对应的channel上没有其他数据了
         if (processResponse(call.connection.responseQueue, false)) {
           try {
             key.interestOps(0);
@@ -996,6 +1007,7 @@ public abstract class Server {
           //
           // Extract the first call
           //
+          //先进先出，因此从respondeQueue中取出第一个Call对象进行处理
           call = responseQueue.removeFirst();
           SocketChannel channel = call.connection.channel;
           if (LOG.isDebugEnabled()) {
@@ -1004,11 +1016,12 @@ public abstract class Server {
           //
           // Send as much data as we can in the non-blocking fashion
           //
+          //将call.rpcResponse中的数据写入到channel中。Responder线程会检测到对应的channel处于ready状态
           int numBytes = channelWrite(channel, call.rpcResponse);
           if (numBytes < 0) {
             return true;
           }
-          if (!call.rpcResponse.hasRemaining()) {
+          if (!call.rpcResponse.hasRemaining()) {//数据已经写入完毕
             //Clear out the response buffer so it can be collected
             call.rpcResponse = null;
             call.connection.decRpcCount();
@@ -1026,8 +1039,10 @@ public abstract class Server {
             // If we were unable to write the entire response out, then 
             // insert in Selector queue. 
             //
+        	 //如果数据没有完成写操作，则把Call对象重新放进responseQueue中的第一个，下次会进行发送剩余数据
             call.connection.responseQueue.addFirst(call);
-            
+            //如果是inHandler,说明这个方法是Handler直接调用的，这时候数据没有发送完毕，需要将channel注册到writeSelector，
+            //这样Responder.doRunLoop()中就可以检测到这个writeSelector上的writable的SocketChannel，然后把剩余数据发送给客户端
             if (inHandler) {
               // set the serve time when the response has to be sent later
               call.timestamp = Time.now();
@@ -1037,6 +1052,8 @@ public abstract class Server {
                 // Wakeup the thread blocked on select, only then can the call 
                 // to channel.register() complete.
                 writeSelector.wakeup();
+                //将channel注册到writeSelector，同时将这个Call对象attach到这个SelectionKey对象
+                //这样Responder线程就可以通过select方法检测到channel上的写事件，同时从Call中提取需要写的数据以及SocketChannel，进而进行写操作
                 channel.register(writeSelector, SelectionKey.OP_WRITE, call);
               } catch (ClosedChannelException e) {
                 //Its ok. channel might be closed else where.
@@ -1067,9 +1084,11 @@ public abstract class Server {
     //
     void doRespond(Call call) throws IOException {
       synchronized (call.connection.responseQueue) {
-        call.connection.responseQueue.addLast(call);
-        if (call.connection.responseQueue.size() == 1) {
-          processResponse(call.connection.responseQueue, true);
+        call.connection.responseQueue.addLast(call);//将这个Call对象添加到对应的connection的responseQueue中
+        if (call.connection.responseQueue.size() == 1) {//如果目前与这个客户端的连接的相应队列中只有一条数据，则直接处理
+        	//对这个connection的responseQueue进行处理，之所以设置第二个参数为true，是为了
+        	//在Handler中调用doRespond方法的时候，由于是Handler，所以必定是一个新的请求过来，必须重新将channel注册到在Responder.writerSelector上，以便下次响应
+        	processResponse(call.connection.responseQueue, true);
         }
       }
     }
@@ -1187,7 +1206,7 @@ public abstract class Server {
       this.channel = channel;
       this.lastContact = lastContact;
       this.data = null;
-      this.dataLengthBuffer = ByteBuffer.allocate(4); //正常情况下，rpc请求的请求头应该是RpcConstants.HEADER
+      this.dataLengthBuffer = ByteBuffer.allocate(4); //正常情况下，rpc请求的请求头应该是@Code RpcConstants.HEADER
       this.unwrappedData = null;
       this.unwrappedDataLengthBuffer = ByteBuffer.allocate(4);
       this.socket = channel.socket();
@@ -1515,19 +1534,19 @@ public abstract class Server {
             return count; 
         }
         
-        if (!connectionHeaderRead) { //如果还没有读到连接的header信息
+        if (!connectionHeaderRead) { //如果还没有读到连接的header信息，第一次进入循环，肯定是false
           //Every connection is expected to send the header.
           if (connectionHeaderBuf == null) {
-            connectionHeaderBuf = ByteBuffer.allocate(3);
+            connectionHeaderBuf = ByteBuffer.allocate(3);//分配空闲ByteBuffer
           }
-          count = channelRead(channel, connectionHeaderBuf);
+          count = channelRead(channel, connectionHeaderBuf);//从channel中读取Header信息到connectionHeaderBuf
           if (count < 0 || connectionHeaderBuf.remaining() > 0) {
             return count;//如果ByteBuffer还有剩余，说明读取出现了异常情况，退出
           }
-          int version = connectionHeaderBuf.get(0);
+          int version = connectionHeaderBuf.get(0);//第一个字节，版本信息
           // TODO we should add handler for service class later
-          this.setServiceClass(connectionHeaderBuf.get(1));
-          dataLengthBuffer.flip();
+          this.setServiceClass(connectionHeaderBuf.get(1));//第二个字节，serviceClass
+          dataLengthBuffer.flip();//准备开始读取dataLengthBuffer中的信息
           
           // Check if it looks like the user is hitting an IPC port
           // with an HTTP GET - this is a common error, so we can
@@ -1538,7 +1557,7 @@ public abstract class Server {
             return -1;
           }
           
-          //一个合法的RPC请求的请求头应该是hrpc，VERSION= 9
+          //一个合法的RPC请求的请求头应该是hrpc四个字节，VERSION= 9
           if (!RpcConstants.HEADER.equals(dataLengthBuffer)
               || version != CURRENT_VERSION) {
             //Warning is ok since this is not supposed to happen.
@@ -1551,6 +1570,7 @@ public abstract class Server {
           }
           
           // this may switch us into SIMPLE
+          //获取授权类型，none或者SALS
           authProtocol = initializeAuthContext(connectionHeaderBuf.get(2));          
           
           dataLengthBuffer.clear(); //clear方法并不清除数据，而是将position 设置为0，capacity和limit都设置为capacity 
@@ -1559,20 +1579,23 @@ public abstract class Server {
           continue;//如果当前读取到的是header，则继续while循环，读取到的应该是数据长度字段
         }
         
+        //开始读取数据长度字段
         if (data == null) {
           dataLengthBuffer.flip();
           dataLength = dataLengthBuffer.getInt();
           checkDataLength(dataLength);
-          data = ByteBuffer.allocate(dataLength);//根据数据长度初始化data
+         //根据数据长度初始化data，用来装载数据本身
+          data = ByteBuffer.allocate(dataLength);
         }
-        
+        //读取数据到data中
         count = channelRead(channel, data);
         
+        //由于data是按照消息头中的数据长度描述值创建的大小，因此当data.remaining() == 0，则已经读取完了所有的数据，可以开始进行处理了
         if (data.remaining() == 0) {
           dataLengthBuffer.clear();
           data.flip();
           boolean isHeaderRead = connectionContextRead;
-          processOneRpc(data.array());
+          processOneRpc(data.array());//开始解析RPC请求，将请求交付给具体的处理器类
           data = null;
           if (!isHeaderRead) {
             continue;
@@ -1798,15 +1821,18 @@ public abstract class Server {
       try {
         final DataInputStream dis =
             new DataInputStream(new ByteArrayInputStream(buf));
+        //对protobuf的数据进行解码操作，protobuf客户端在发送前的encode与接收端接收后的decod是一正一反的过程
         final RpcRequestHeaderProto header =
             decodeProtobufFromStream(RpcRequestHeaderProto.newBuilder(), dis);
-        callId = header.getCallId();
-        retry = header.getRetryCount();
+        callId = header.getCallId();//获取callId，其实是本次交互的序列号信息，对本次请求的response中会携带序列号，以便客户端分辨对响应进行识别
+        retry = header.getRetryCount();//获取重试次数字段，发送响应的时候，如果发生错误，会根据该字段进行有限次重试
         if (LOG.isDebugEnabled()) {
           LOG.debug(" got #" + callId);
         }
+        //检查业务头信息，主要包括：header中携带的RPC
         checkRpcHeaders(header);
         
+        //callId<0意味着连接、认证尚未正确完成，因此需要进行连接有关的操作
         if (callId < 0) { // callIds typically used during connection setup
           processRpcOutOfBandRequest(header, dis);
         } else if (!connectionContextRead) {
@@ -1814,7 +1840,7 @@ public abstract class Server {
               RpcErrorCodeProto.FATAL_INVALID_RPC_HEADER,
               "Connection context not established");
         } else {
-          processRpcRequest(header, dis);
+          processRpcRequest(header, dis);//校验正常，开始处理RPC请求
         }
       } catch (WrappedRpcServerException wrse) { // inform client of error
         Throwable ioe = wrse.getCause();
@@ -1869,7 +1895,11 @@ public abstract class Server {
     private void processRpcRequest(RpcRequestHeaderProto header,
         DataInputStream dis) throws WrappedRpcServerException,
         InterruptedException {
-      Class<? extends Writable> rpcRequestClass = 
+      //获取RPC类型，目前两种RPC类型有WritableRPC 和ProtobufRPC
+      //老版本的Hadoop使用WritableRPC，新版本的Hadoop开始使用基于Protobuf协议的RPC,即ProtobufRPC
+      //以ProtobufRpcEngine为例，对应的WrapperClass是ProtobufRpcEngine.RpcRequestWrapper
+     //通过提取并实例化这个wratper，用来解析请求中的具体字段
+    	Class<? extends Writable> rpcRequestClass = 
           getRpcRequestWrapper(header.getRpcKind());
       if (rpcRequestClass == null) {
         LOG.warn("Unknown rpc kind "  + header.getRpcKind() + 
@@ -1879,8 +1909,11 @@ public abstract class Server {
         throw new WrappedRpcServerException(
             RpcErrorCodeProto.FATAL_INVALID_RPC_HEADER, err);   
       }
+      
       Writable rpcRequest;
       try { //Read the rpc request
+    	//可以将rpcRequestClass理解为当前基于具体某个序列化协议的解释器，解释器负责解释
+    	//和解析请求内容，封装为rpcRequest对象
         rpcRequest = ReflectionUtils.newInstance(rpcRequestClass, conf);
         rpcRequest.readFields(dis);
       } catch (Throwable t) { // includes runtime exception from newInstance
@@ -1900,7 +1933,7 @@ public abstract class Server {
         traceSpan = Trace.startSpan(rpcRequest.toString(), parentSpan).detach();
       }
 
-      //根据请求创建对应的Call对象
+      //根据请求中提取的callId、重试次数、当前的连接、RPC类型、发起请求的客户端ID等，创建对应的Call对象
       Call call = new Call(header.getCallId(), header.getRetryCount(),
           rpcRequest, this, ProtoUtil.convert(header.getRpcKind()),
           header.getClientId().toByteArray(), traceSpan);
@@ -2056,10 +2089,12 @@ public abstract class Server {
       while (running) {
         TraceScope traceScope = null;
         try {
+          //从callQueue中取出Call对象，Call对象封装了请求的所有信息，包括连接对象、序列号等等信息
           final Call call = callQueue.take(); // pop the queue; maybe blocked here
           if (LOG.isDebugEnabled()) {
             LOG.debug(Thread.currentThread().getName() + ": " + call + " for RpcKind " + call.rpcKind);
           }
+          //判断这个请求对应是SocketChannel是否是open状态，如果不是，可能客户端已经断开连接，没有响应的必要
           if (!call.connection.channel.isOpen()) {
             LOG.info(Thread.currentThread().getName() + ": skipped " + call);
             continue;
@@ -2078,6 +2113,7 @@ public abstract class Server {
           try {
             // Make the call as the user via Subject.doAs, thus associating
             // the call with the Subject
+        	 
             if (call.connection.user == null) {
               value = call(call.rpcKind, call.connection.protocolName, call.rpcRequest, 
                            call.timestamp);
@@ -2087,7 +2123,7 @@ public abstract class Server {
                   (new PrivilegedExceptionAction<Writable>() {
                      @Override
                      public Writable run() throws Exception {
-                       // make the call
+                       // make the call   
                        //call方法是一个抽象方法，实际运行的时候会调用具体实现类的call
                        return call(call.rpcKind, call.connection.protocolName, 
                                    call.rpcRequest, call.timestamp);
@@ -2134,6 +2170,7 @@ public abstract class Server {
             // responder.doResponse() since setupResponse may use
             // SASL to encrypt response data and SASL enforces
             // its own message ordering.
+        	//将error信息封装在call对象中，responder线程将会处理这个Call对象，向客户端返回响应
             setupResponse(buf, call, returnStatus, detailedErr, 
                 value, errorClass, error);
             
@@ -2144,6 +2181,7 @@ public abstract class Server {
                   + call.toString());
               buf = new ByteArrayOutputStream(INITIAL_RESP_BUF_SIZE);
             }
+            
             responder.doRespond(call);
           }
         } catch (InterruptedException e) {
@@ -2655,7 +2693,8 @@ public abstract class Server {
    * Helper for {@link #channelRead(ReadableByteChannel, ByteBuffer)}
    * and {@link #channelWrite(WritableByteChannel, ByteBuffer)}. Only
    * one of readCh or writeCh should be non-null.
-   * 
+   * 正常情况下，channelIO()方法会不断循环，直到将buf中的数据全部写完比到channle。但是不对此保证。
+   * 因此，如果实在没有写完，这将剩余未写完的数据量返回
    * @see #channelRead(ReadableByteChannel, ByteBuffer)
    * @see #channelWrite(WritableByteChannel, ByteBuffer)
    */
@@ -2663,15 +2702,17 @@ public abstract class Server {
                                WritableByteChannel writeCh,
                                ByteBuffer buf) throws IOException {
     
-    int originalLimit = buf.limit();
-    int initialRemaining = buf.remaining();
+    int originalLimit = buf.limit();//ByteBuffer的limit
+    int initialRemaining = buf.remaining(); //ByteBuffer中剩余可用的空间
     int ret = 0;
     
+    //只要还有remaining，就不断读取字段到ByteBuffer中
     while (buf.remaining() > 0) {
       try {
+    	//如果remaining<NIO_BUFFER_LIMIT，则使用remaining，否则，使用NIO_BUFFER_LIMIT
         int ioSize = Math.min(buf.remaining(), NIO_BUFFER_LIMIT);
-        buf.limit(buf.position() + ioSize);
-        
+        buf.limit(buf.position() + ioSize);//设置本轮最大可读写位置
+        //WritableByteChannel 会把position到limit之间的数据写入channel
         ret = (readCh == null) ? writeCh.write(buf) : readCh.read(buf); 
         
         if (ret < ioSize) {
@@ -2679,6 +2720,7 @@ public abstract class Server {
         }
 
       } finally {
+    	//每一轮写，都需要将limit改回原来的limit，防止方法退出的时候originalLimit被修改
         buf.limit(originalLimit);        
       }
     }

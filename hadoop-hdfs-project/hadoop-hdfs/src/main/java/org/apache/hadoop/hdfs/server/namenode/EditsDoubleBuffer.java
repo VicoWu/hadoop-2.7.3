@@ -71,6 +71,7 @@ public class EditsDoubleBuffer {
     bufCurrent = bufReady = null;
   }
   
+  //缓存交换
   public void setReadyToFlush() {
     assert isFlushed() : "previous data not flushed yet";
     TxnBuffer tmp = bufReady;

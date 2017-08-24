@@ -48,6 +48,7 @@ public interface JournalManager extends Closeable, LogsPurgeable,
   /**
    * Begin writing to a new segment of the log stream, which starts at
    * the given transaction ID.
+   * 对于QuorumJournalManager,使用QuorumOutputStream ,对于FileJournalManager,使用EditLogOutputStream
    */
   EditLogOutputStream startLogSegment(long txId, int layoutVersion)
       throws IOException;

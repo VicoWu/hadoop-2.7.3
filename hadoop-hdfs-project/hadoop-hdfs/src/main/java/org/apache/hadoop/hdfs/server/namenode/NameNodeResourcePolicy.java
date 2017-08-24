@@ -53,28 +53,29 @@ final class NameNodeResourcePolicy {
     int requiredResourceCount = 0;
     int redundantResourceCount = 0;
     int disabledRedundantResourceCount = 0;
+    //这里的每一个CheckableNameNodeResource接口的实现类是JournalAndStream对象
     for (CheckableNameNodeResource resource : resources) {
-      if (!resource.isRequired()) {
-        redundantResourceCount++;
-        if (!resource.isResourceAvailable()) {
-          disabledRedundantResourceCount++;
+      if (!resource.isRequired()) {//CheckableNameNodeResource中的isRequired=true代表只有当这个资源是available，NN才能继续操作
+        redundantResourceCount++;//这个资源不是必须的，是冗余资源
+        if (!resource.isResourceAvailable()) {//如果这个冗余资源不可用
+          disabledRedundantResourceCount++;//对不可用的冗余资源计数
         }
       } else {
-        requiredResourceCount++;
+        requiredResourceCount++;//这个资源是必须的
         if (!resource.isResourceAvailable()) {
           // Short circuit - a required resource is not available.
-          return false;
+          return false;//只要有一个requiredResource处于unavailable状态，则返回false
         }
       }
     }
-    
-    if (redundantResourceCount == 0) {
+    //所有的必须资源都处于available状态，继续进行下面的判断
+    if (redundantResourceCount == 0) {//如果没有任何一个非必须资源
       // If there are no redundant resources, return true if there are any
       // required resources available.
-      return requiredResourceCount > 0;
-    } else {
+      return requiredResourceCount > 0;//判断
+    } else {//存在非必须资源
       return redundantResourceCount - disabledRedundantResourceCount >=
-          minimumRedundantResources;
+          minimumRedundantResources;//满足最小可用的冗余资源配置
     }
   }
 }

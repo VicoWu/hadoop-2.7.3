@@ -2071,6 +2071,7 @@ public class DataNode extends ReconfigurableBase
 
     /**
      * Do the deed, write the bytes
+     *  DataTransfer线程，用来按照NameNode的要求，将一些块数据发送给其它DataNode
      */
     @Override
     public void run() {

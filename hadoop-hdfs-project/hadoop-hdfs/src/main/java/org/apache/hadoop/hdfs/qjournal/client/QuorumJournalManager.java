@@ -100,6 +100,15 @@ public class QuorumJournalManager implements JournalManager {
   private int outputBufferCapacity = 512 * 1024;
   private final URLConnectionFactory connectionFactory;
   
+  /**
+   * 从FSEdit.initJournals方法可以看到，一个QuorumJournalManager对象对应了一个JournalServer的List
+   * 比如qjournal://10.120.117.102:848510.120.117.103:8485;10.120.117.104:8485/datahdfsmaster，
+   * 则这个对象会管理以上三个Server，具体是通过AsyncLoggerSet进行管理，每一个Server会对应一个AsyncLogger
+   * @param conf
+   * @param uri
+   * @param nsInfo
+   * @throws IOException
+   */
   public QuorumJournalManager(Configuration conf,
       URI uri, NamespaceInfo nsInfo) throws IOException {
     this(conf, uri, nsInfo, IPCLoggerChannel.FACTORY);
@@ -113,6 +122,8 @@ public class QuorumJournalManager implements JournalManager {
     this.conf = conf;
     this.uri = uri;
     this.nsInfo = nsInfo;
+    //初始化一个AsyncLoggerSet类，用来管理多个AsyncLogger的实现
+    //这里的loggerFactory默认是IPCLoggerChannel.FACTORY
     this.loggers = new AsyncLoggerSet(createLoggers(loggerFactory));
     this.connectionFactory = URLConnectionFactory
         .newDefaultURLConnectionFactory(conf);
@@ -144,6 +155,12 @@ public class QuorumJournalManager implements JournalManager {
         DFSConfigKeys.DFS_QJOURNAL_WRITE_TXNS_TIMEOUT_DEFAULT);
   }
   
+  /**
+   * 这里的loggerFactory默认是IPCLoggerChannel.FACTORY
+   * @param factory
+   * @return
+   * @throws IOException
+   */
   protected List<AsyncLogger> createLoggers(
       AsyncLogger.Factory factory) throws IOException {
     return createLoggers(conf, uri, nsInfo, factory);

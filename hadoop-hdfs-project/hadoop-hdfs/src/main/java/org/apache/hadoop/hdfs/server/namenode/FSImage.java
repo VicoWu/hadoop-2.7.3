@@ -792,7 +792,7 @@ public class FSImage implements Closeable {
       editLog.recoverUnclosedStreams();
     } else {
       // This NN is HA and we're not doing an upgrade.
-      editLog.initSharedJournalsForRead();
+      editLog.initSharedJournalsForRead();//初始化共享edits log。一般使用QJM来进行EditLog共享
     }
   }
 

@@ -160,6 +160,7 @@ public class JobClient extends CLI {
       MRJobConfig.DEFAULT_MR_CLIENT_JOB_RETRY_INTERVAL;
 
   static{
+	 
     ConfigUtil.loadResources();
   }
 
@@ -169,6 +170,7 @@ public class JobClient extends CLI {
    * remote service to provide certain functionality.
    */
   static class NetworkedJob implements RunningJob {
+	  
     Job job;
     /**
      * We store a JobProfile and a timestamp for when we last

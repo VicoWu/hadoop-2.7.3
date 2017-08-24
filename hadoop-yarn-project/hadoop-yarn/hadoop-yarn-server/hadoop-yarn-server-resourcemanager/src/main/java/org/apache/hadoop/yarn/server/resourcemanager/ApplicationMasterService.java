@@ -494,7 +494,7 @@ public class ApplicationMasterService extends AbstractService implements
       // Send the status update to the appAttempt.
       //将ApplicationMaster返回到关于进度的信息，更新到ReSourceManager所维护的appAttempt中去，
       //使得这两部分信息保持一致,   this.rmContext.getDispatcher()是AsyncDispatcher，得到的
-      //eventHandler是ApplicationAttemptEventDispatcher
+      //eventHandler是@code ApplicationAttemptEventDispatcher
       this.rmContext.getDispatcher().getEventHandler().handle(
           new RMAppAttemptStatusupdateEvent(appAttemptId, request
               .getProgress()));

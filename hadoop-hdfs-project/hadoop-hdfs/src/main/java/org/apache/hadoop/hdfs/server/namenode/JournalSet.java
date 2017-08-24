@@ -86,11 +86,13 @@ public class JournalSet implements JournalManager {
    * 
    * If a Journal gets disabled due to an error writing to its
    * stream, then the stream will be aborted and set to null.
+   * 这个JournalAndStream维护了一个JournalManager和一个Stream的对应关系
+   * ，即封装了一个JournalManager和一个EditLogOutputStream的实现类
    */
   static class JournalAndStream implements CheckableNameNodeResource {
-    private final JournalManager journal;
+    private final JournalManager journal; //对应的JournalManager
     private boolean disabled = false;
-    private EditLogOutputStream stream;
+    private EditLogOutputStream stream;//可能是一个QuorumOutputStream，或者是一个EditLogFileOutputStream
     private final boolean required;
     private final boolean shared;
     
@@ -101,9 +103,13 @@ public class JournalSet implements JournalManager {
       this.shared = shared;
     }
 
+    //在JournalSet.startLogSegment中会调用JournalAndStream.startLogSegment()方法，方法中
+    //会创建一个QuorumOutputStream或者EditLogFileOutputStream的strema用来对edit文件进行写操作
     public void startLogSegment(long txId, int layoutVersion) throws IOException {
       Preconditions.checkState(stream == null);
       disabled = false;
+      //如果是QuorumJournalManager，则stream是一个QuorumOutputStream
+      //如果是FileJournalManager，则stream是一个EditLogFileOutputStream
       stream = journal.startLogSegment(txId, layoutVersion);
     }
 
@@ -189,6 +195,7 @@ public class JournalSet implements JournalManager {
   // COW implementation is necessary since some users (eg the web ui) call
   // getAllJournalStreams() and then iterate. Since this is rarely
   // mutated, there is no performance concern.
+  //维护了所有的JournalAndStream对象,通过FSEdit类中调用initJournals方法进行添加的
   private final List<JournalAndStream> journals =
       new CopyOnWriteArrayList<JournalSet.JournalAndStream>();
   final int minimumRedundantJournals;
@@ -213,6 +220,12 @@ public class JournalSet implements JournalManager {
   }
 
   
+  /**
+   * 在JournalSet维护的所有的journal上面执行apply，即对所有的journal执行startLogSegment
+   * 然后返回一个JournalSetOutputStream，以后FSEditLog调用写等操作，都交付给JournalSetOutputStream
+   * ，JournalSetOutputStream会负责在所有的journal上都执行这个操作
+   */
+  
   @Override
   public EditLogOutputStream startLogSegment(final long txId,
       final int layoutVersion) throws IOException {
@@ -225,6 +238,9 @@ public class JournalSet implements JournalManager {
     return new JournalSetOutputStream();
   }
   
+  /**
+   * 用来告知远程的JournalNode，对应的某个segment可以进行关闭操作了。
+   */
   @Override
   public void finalizeLogSegment(final long firstTxId, final long lastTxId)
       throws IOException {
@@ -233,6 +249,7 @@ public class JournalSet implements JournalManager {
       public void apply(JournalAndStream jas) throws IOException {
         if (jas.isActive()) {
           jas.closeStream();
+          //最终调用对应的JournalManager的finalizeLogSegment,这个方法会向远程的JournalServer发送关闭请求
           jas.getManager().finalizeLogSegment(firstTxId, lastTxId);
         }
       }
@@ -383,6 +400,7 @@ public class JournalSet implements JournalManager {
    * @param closure {@link JournalClosure} object encapsulating the operation.
    * @param status message used for logging errors (e.g. "opening journal")
    * @throws IOException If the operation fails on all the journals.
+   * 在所有的journalManaer上调用apply方法
    */
   private void mapJournalsAndReportErrors(
       JournalClosure closure, String status) throws IOException{
@@ -435,6 +453,7 @@ public class JournalSet implements JournalManager {
   /**
    * An implementation of EditLogOutputStream that applies a requested method on
    * all the journals that are currently active.
+   * JournalSetOutputStream只是一个装饰器，用来在FSEditLog发起某个操作的时候，将这个操作应用到所有的 Journal上面
    */
   private class JournalSetOutputStream extends EditLogOutputStream {
 
@@ -501,6 +520,9 @@ public class JournalSet implements JournalManager {
     }
 
     @Override
+    /**
+     * 对journals中的每一个，调用.getCurrentStream().setReadyToFlush()操作
+     */
     public void setReadyToFlush() throws IOException {
       mapJournalsAndReportErrors(new JournalClosure() {
         @Override
@@ -530,6 +552,7 @@ public class JournalSet implements JournalManager {
         @Override
         public void apply(JournalAndStream jas) throws IOException {
           if (jas.isActive()) {
+        	//jas是一个JournalAndStream对象
             jas.getCurrentStream().flush();
           }
         }
@@ -587,7 +610,9 @@ public class JournalSet implements JournalManager {
     add(j, required, false);
   }
   
+  //添加一个JournalStream对象，一个JournalAndStream对象封装了一个JournalManager和一个EditLogOutputStream的实现类
   void add(JournalManager j, boolean required, boolean shared) {
+	//根据JournalManager构造一个JournalAndStream对象
     JournalAndStream jas = new JournalAndStream(j, required, shared);
     journals.add(jas);
   }

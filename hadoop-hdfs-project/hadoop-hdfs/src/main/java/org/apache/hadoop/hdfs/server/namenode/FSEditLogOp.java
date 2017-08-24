@@ -141,6 +141,7 @@ import com.google.common.collect.Lists;
  */
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
+//一次操作，对应于editlog中的一个事务，会有一个独立的id
 public abstract class FSEditLogOp {
   public final FSEditLogOpCodes opCode;
   long txid;

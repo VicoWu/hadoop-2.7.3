@@ -140,16 +140,18 @@ public class FSEditLog implements LogsPurgeable {
    * setup.
    */
   private enum State {
-    UNINITIALIZED,
-    BETWEEN_LOG_SEGMENTS,
-    IN_SEGMENT,
-    OPEN_FOR_READING,
+    UNINITIALIZED,//1.edit log构造之前的状态
+    BETWEEN_LOG_SEGMENTS,//当前的log完成了写操作正在被关闭，同时下一个log还没有被创建完成，这个事件非常短
+    IN_SEGMENT,//预示这个log可以被写入
+    OPEN_FOR_READING,//2.如果NameNode是standby状态，则整个standby状态下都是OPEN_FOR_READING
     CLOSED;
   }  
-  private State state = State.UNINITIALIZED;
+  private State state = State.UNINITIALIZED;//FSEditLog没有构造前的初始化装填
   
   //initialize
-  private JournalSet journalSet = null;
+  private JournalSet journalSet = null;//FSEditLog只会直接使用JournalSet
+  //在开始写一个editLog，即调用startLogSegment的时候，会创建这个EditLogOutputStream实现
+  //,一个JournalSet.JournalSetOutputStream,用来代理JournalSet对象所有stream的读写。
   private EditLogOutputStream editLogStream = null;
 
   // a monotonically increasing counter that represents transactionIds.
@@ -160,6 +162,7 @@ public class FSEditLog implements LogsPurgeable {
 
   // the first txid of the log that's currently open for writing.
   // If this value is N, we are currently writing to edits_inprogress_N
+  //当前正在进行写操作的日志文件名中包含的数字，代表这个正在进行的写操作的第一个文件的transaction id
   private long curSegmentTxId = HdfsConstants.INVALID_TXID;
 
   // the time of printing the statistics to the log file.
@@ -224,10 +227,10 @@ public class FSEditLog implements LogsPurgeable {
    * 
    * @param conf The namenode configuration
    * @param storage Storage object used by namenode
-   * @param editsDirs List of journals to use
+   * @param editsDirs List of journals to use ，这是通过FSNamesystem.getNamespaceEditsDirs(config)读取的
    */
   FSEditLog(Configuration conf, NNStorage storage, List<URI> editsDirs) {
-    isSyncRunning = false;
+    isSyncRunning = false;//是否正在进行同步
     this.conf = conf;
     this.storage = storage;
     metrics = NameNode.getNameNodeMetrics();
@@ -235,8 +238,10 @@ public class FSEditLog implements LogsPurgeable {
      
     // If this list is empty, an error will be thrown on first use
     // of the editlog, as no journals will exist
-    this.editsDirs = Lists.newArrayList(editsDirs);
-
+    this.editsDirs = Lists.newArrayList(editsDirs);//edit文件的List
+    //sharedEdits指的就是我们配置的dfs.namenode.shared.edits.dir
+    //除非是用逗号分隔，否则，sharedEditsDirs只有一个
+    //比如qjournal://10.120.117.102:848510.120.117.103:8485;10.120.117.104:8485/datahdfsmaster，只是一个
     this.sharedEditsDirs = FSNamesystem.getSharedEditsDirs(conf);
   }
   
@@ -248,6 +253,9 @@ public class FSEditLog implements LogsPurgeable {
     state = State.BETWEEN_LOG_SEGMENTS;
   }
   
+  /**
+   * 初始化QuorumJournalManager
+   */
   public synchronized void initSharedJournalsForRead() {
     if (state == State.OPEN_FOR_READING) {
       LOG.warn("Initializing shared journals for READ, already open for READ",
@@ -258,9 +266,14 @@ public class FSEditLog implements LogsPurgeable {
         state == State.CLOSED);
     
     initJournals(this.sharedEditsDirs);
-    state = State.OPEN_FOR_READING;
+    state = State.OPEN_FOR_READING;//FSEditLog构造完毕，进入OPEN_FOR_READING状态
   }
   
+  /**
+   * 比如，如果配置成qjournal://10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485/datahdfsmaster，则这整个是一个Journal
+   * 初始化Journal，对于QJM而言，创建一个JournalAndStream对象，交给JournalSet进行管理，这个JournalAndStream包含了对应的Journalmanager
+   * @param dirs
+   */
   private synchronized void initJournals(List<URI> dirs) {
     int minimumRedundantJournals = conf.getInt(
         DFSConfigKeys.DFS_NAMENODE_EDITS_DIR_MINIMUM_KEY,
@@ -269,17 +282,23 @@ public class FSEditLog implements LogsPurgeable {
     synchronized(journalSetLock) {
       journalSet = new JournalSet(minimumRedundantJournals);
 
+      
       for (URI u : dirs) {
+    	 //required edits dir必须是edits dir 的一个子集。查看getRequiredNamespaceEditsDirs，
+    	  //可以看到shared dir都加进来了，因此，shared dir都会是required
         boolean required = FSNamesystem.getRequiredNamespaceEditsDirs(conf)
             .contains(u);
-        if (u.getScheme().equals(NNStorage.LOCAL_URI_SCHEME)) {
+        if (u.getScheme().equals(NNStorage.LOCAL_URI_SCHEME)) {//这是一个本地的editLog的dir
           StorageDirectory sd = storage.getStorageDirectory(u);
           if (sd != null) {
             journalSet.add(new FileJournalManager(conf, sd, storage),
                 required, sharedEditsDirs.contains(u));
           }
         } else {
-          journalSet.add(createJournal(u), required,
+        	//这是一个远程的JournalNode的URI，如果配置成qjournal://10.120.117.102:8485，则schema为qjournal
+        	//根据hdfs-default.xml的配置qjournal这个schema对应的默认类是org.apache.hadoop.hdfs.qjournal.client.QuorumJournalManager
+           //并且，每一个URI（qjournal://10.120.117.102:848510.120.117.103:8485;10.120.117.104:8485/datahdfsmaster是一个URI）对应一个QuorumJournalManager
+        	journalSet.add(createJournal(u), required,
               sharedEditsDirs.contains(u));
         }
       }
@@ -306,6 +325,7 @@ public class FSEditLog implements LogsPurgeable {
     Preconditions.checkState(state == State.BETWEEN_LOG_SEGMENTS,
         "Bad state: %s", state);
 
+    //在上一个transactionid的基础上+1
     long segmentTxId = getLastWrittenTxId() + 1;
     // Safety check: we should never start a segment if there are
     // newer txids readable.
@@ -420,11 +440,12 @@ public class FSEditLog implements LogsPurgeable {
       
       // wait if an automatic sync is scheduled
       waitIfAutoSyncScheduled();
-      
+      //事务开始，txit自增1
       long start = beginTransaction();
-      op.setTransactionId(txid);
+      op.setTransactionId(txid);//为EditLog中的每一个Edit设置一个独立的id
 
       try {
+    	//调用JournalSet.JournalSetOutputStream.write方法
         editLogStream.write(op);
       } catch (IOException ex) {
         // All journals failed, it is handled in logSync.
@@ -610,12 +631,13 @@ public class FSEditLog implements LogsPurgeable {
           }
      
           // now, this thread will do the sync
-          syncStart = txid;
+          syncStart = txid;//当前的transaction id
           isSyncRunning = true;
           sync = true;
   
           // swap buffers
           try {
+        	  //必须保证配置的存在至少一个journal,至少有一个非必须的journal处于enable状态，并且所有的必须的journal都是enable状态
             if (journalSet.isEmpty()) {
               throw new IOException("No journals available to flush");
             }
@@ -644,7 +666,7 @@ public class FSEditLog implements LogsPurgeable {
       long start = monotonicNow();
       try {
         if (logStream != null) {
-          logStream.flush();
+          logStream.flush();//实际上调用了JournalSet.JournalSetOutputStream.flush 方法，最终将调用对应的JournalManager的相关方法
         }
       } catch (IOException ex) {
         synchronized (this) {
@@ -1212,6 +1234,9 @@ public class FSEditLog implements LogsPurgeable {
   /**
    * Start writing to the log segment with the given txid.
    * Transitions from BETWEEN_LOG_SEGMENTS state to IN_LOG_SEGMENT state. 
+   * 开始对segment进行写入操作。这个在openForWrite中被调用，并且最终调用journalSet.startLogSegment
+   * 方法
+   * FSEdit.startLogSegment() -> JournalSet.startLogSegment() -> JournalAndStream.startLogSegment()
    */
   synchronized void startLogSegment(final long segmentTxId,
       boolean writeHeaderTxn) throws IOException {
@@ -1220,9 +1245,11 @@ public class FSEditLog implements LogsPurgeable {
         "Bad txid: %s", segmentTxId);
     Preconditions.checkState(state == State.BETWEEN_LOG_SEGMENTS,
         "Bad state: %s", state);
+    //检查当前segmentId是否小于新的segmentId,curSegmentTxId表示当前正在写的segment文件的最小的id
     Preconditions.checkState(segmentTxId > curSegmentTxId,
         "Cannot start writing to log segment " + segmentTxId +
         " when previous log segment started at " + curSegmentTxId);
+    //查看openForWrite方法，可以看到新的segment文件的Id必须是 txid + 1，即上一个transactionId+1
     Preconditions.checkArgument(segmentTxId == txid + 1,
         "Cannot start log segment at txid %s when next expected " +
         "txid is %s", segmentTxId, txid + 1);
@@ -1234,13 +1261,14 @@ public class FSEditLog implements LogsPurgeable {
     storage.attemptRestoreRemovedStorage();
     
     try {
+    	//JournalSetOutputStream
       editLogStream = journalSet.startLogSegment(segmentTxId,
           NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
     } catch (IOException ex) {
       throw new IOException("Unable to start log segment " +
           segmentTxId + ": too few journals successfully started.", ex);
     }
-    
+    //设置当前in_progress
     curSegmentTxId = segmentTxId;
     state = State.IN_SEGMENT;
 
@@ -1260,6 +1288,7 @@ public class FSEditLog implements LogsPurgeable {
     Preconditions.checkState(isSegmentOpen(),
         "Bad state: %s", state);
     
+   
     if (writeEndTxn) {
       logEdit(LogSegmentOp.getInstance(cache.get(), 
           FSEditLogOpCodes.OP_END_LOG_SEGMENT));
@@ -1270,6 +1299,7 @@ public class FSEditLog implements LogsPurgeable {
     
     final long lastTxId = getLastWrittenTxId();
     
+    //文件的关闭
     try {
       journalSet.finalizeLogSegment(curSegmentTxId, lastTxId);
       editLogStream = null;
@@ -1277,7 +1307,7 @@ public class FSEditLog implements LogsPurgeable {
       //All journals have failed, it will be handled in logSync.
     }
     
-    state = State.BETWEEN_LOG_SEGMENTS;
+    state = State.BETWEEN_LOG_SEGMENTS;//当前segment文件关闭，下一个segment文件没有开启，处于BETWEEN_LOG_SEGMENTS状态
   }
   
   /**
@@ -1624,6 +1654,9 @@ public class FSEditLog implements LogsPurgeable {
    * @param uri Uri to construct
    * @return The constructed journal manager
    * @throws IllegalArgumentException if no class is configured for uri
+   * 构造一个JournalManager对象，
+   * 如果uri的schema是qjournal， 则JournalManager是QuorumJournalManager
+   * 如果uri的schema是file，则JournalManager是FileJournalManager
    */
   private JournalManager createJournal(URI uri) {
     Class<? extends JournalManager> clazz
