@@ -158,6 +158,7 @@ public class FSEditLog implements LogsPurgeable {
   private long txid = 0;
 
   // stores the last synced transactionId.
+  //最后一次同步的transactionId，在logSync()中修改
   private long synctxid = 0;
 
   // the first txid of the log that's currently open for writing.
@@ -169,7 +170,7 @@ public class FSEditLog implements LogsPurgeable {
   private long lastPrintTime;
 
   // is a sync currently running?
-  private volatile boolean isSyncRunning;
+  private volatile boolean isSyncRunning;//标记是否当前这个EditLog正处于同步状态。
 
   // is an automatic sync scheduled?
   private volatile boolean isAutoSyncScheduled = false;
@@ -253,6 +254,10 @@ public class FSEditLog implements LogsPurgeable {
     state = State.BETWEEN_LOG_SEGMENTS;
   }
   
+  public static void main(String[] args){
+	 URI uri =  URI.create("qjournal://10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485/datahdfsmaster");
+	 System.out.println(uri.getAuthority());;
+  }
   /**
    * 初始化QuorumJournalManager
    */
@@ -325,7 +330,7 @@ public class FSEditLog implements LogsPurgeable {
     Preconditions.checkState(state == State.BETWEEN_LOG_SEGMENTS,
         "Bad state: %s", state);
 
-    //在上一个transactionid的基础上+1
+    //在上一个transactionid的基础上+1,这个Id是一个SegmetnId
     long segmentTxId = getLastWrittenTxId() + 1;
     // Safety check: we should never start a segment if there are
     // newer txids readable.
@@ -434,14 +439,14 @@ public class FSEditLog implements LogsPurgeable {
    * store yet.
    */
   void logEdit(final FSEditLogOp op) {
-    synchronized (this) {
+    synchronized (this) {//一个FSEditLog对象的logEdit方法不可以多个线程同时调用
       assert isOpenForWrite() :
         "bad state: " + state;
       
       // wait if an automatic sync is scheduled
       waitIfAutoSyncScheduled();
       //事务开始，txit自增1
-      long start = beginTransaction();
+      long start = beginTransaction();//设置myTransactionId这个Threadlocal变量
       op.setTransactionId(txid);//为EditLog中的每一个Edit设置一个独立的id
 
       try {
@@ -459,15 +464,16 @@ public class FSEditLog implements LogsPurgeable {
       if (!shouldForceSync()) {
         return;
       }
-      isAutoSyncScheduled = true;
+      isAutoSyncScheduled = true;//准备进行同步操作，因此将isAutoSyncScheduled设置为true,避免其它线程在自己正在sync的时候进行写操作。
     }
-    
     // sync buffered edit log entries to persistent store
+    //跳出同步快，logSync方法不用放在同步块中，因为logSync只是synch 的过程需要同步，但是flush的过程不需要同步。
     logSync();
   }
 
   /**
    * Wait if an automatic sync is scheduled
+   * 等待其他线程的同步操作完成。如果有其他线程正在进行synch，任何线程不可以进行写操作
    */
   synchronized void waitIfAutoSyncScheduled() {
     try {
@@ -480,6 +486,7 @@ public class FSEditLog implements LogsPurgeable {
   
   /**
    * Signal that an automatic sync scheduling is done if it is scheduled
+   * 设置同步完成标记。此时其他线程才可以进行写操作
    */
   synchronized void doneWithAutoSyncScheduling() {
     if (isAutoSyncScheduled) {
@@ -495,19 +502,25 @@ public class FSEditLog implements LogsPurgeable {
    * @return true if any of the edit stream says that it should sync
    */
   private boolean shouldForceSync() {
+	 //对于QuorumOutputStream.shouldForceSync，返回false
+	  //对于EditLogFileOutputStream,会调用EditsDoubleBuffer.shouldForceSync进行判断
     return editLogStream.shouldForceSync();
   }
   
+  /**
+   * 开始进行sync操作，将
+   * @return
+   */
   private long beginTransaction() {
     assert Thread.holdsLock(this);
     // get a new transactionId
-    txid++;
+    txid++;//设置当前操作的事务id
 
     //
     // record the transactionId when new data was written to the edits log
     //
     TransactionId id = myTransactionId.get();
-    id.txid = txid;
+    id.txid = txid;//将当前操作的事务ID拷贝到自己的线程中保存，防止被其它线程修改，如果有多个线程在操作这个FSEditLog对象，那么txid有可能不等于自己的myTransactionId
     return monotonicNow();
   }
   
@@ -601,12 +614,12 @@ public class FSEditLog implements LogsPurgeable {
     long syncStart = 0;
 
     // Fetch the transactionId of this thread. 
-    long mytxid = myTransactionId.get().txid;
+    long mytxid = myTransactionId.get().txid;//myTransactionId在beginTransaction中被设置
     
     boolean sync = false;
     try {
       EditLogOutputStream logStream = null;
-      synchronized (this) {
+      synchronized (this) {// synch阶段，必须保证只有一个线程操作当前的FSEditLog对象
         try {
           printStatistics(false);
 
@@ -621,7 +634,7 @@ public class FSEditLog implements LogsPurgeable {
           //
           // If this transaction was already flushed, then nothing to do
           //
-          if (mytxid <= synctxid) {
+          if (mytxid <= synctxid) {//如果自己的线程保存到最后一次操作的transactionId<=最后一次同步的transaction，则放弃
             numTransactionsBatchedInSync++;
             if (metrics != null) {
               // Metrics is non-null only when used inside name node
@@ -631,7 +644,7 @@ public class FSEditLog implements LogsPurgeable {
           }
      
           // now, this thread will do the sync
-          syncStart = txid;//当前的transaction id
+          syncStart = txid;//当前这个FSEditLog的transaction id，代表这次同步所同步的最大的transactionId
           isSyncRunning = true;
           sync = true;
   
@@ -655,13 +668,13 @@ public class FSEditLog implements LogsPurgeable {
           }
         } finally {
           // Prevent RuntimeException from blocking other log edit write 
-          doneWithAutoSyncScheduling();
+          doneWithAutoSyncScheduling();//完成synch，这时候正在操作EditLog的其它线程就可以进行写入操作了
         }
         //editLogStream may become null,
         //so store a local variable for flush.
         logStream = editLogStream;
       }
-      
+      //跳出同步快，开始进行flush操作，将EditLog文件写入本地editlog或者发送到远程的QJM.由于是双缓存，因此这个过程允许其他线程往这个线程中写数据
       // do the sync
       long start = monotonicNow();
       try {
@@ -690,8 +703,8 @@ public class FSEditLog implements LogsPurgeable {
       // Prevent RuntimeException from blocking other log edit sync 
       synchronized (this) {
         if (sync) {
-          synctxid = syncStart;
-          isSyncRunning = false;
+          synctxid = syncStart;//修改已经同步的transactionId
+          isSyncRunning = false;//同步结束
         }
         this.notifyAll();
      }
@@ -1299,7 +1312,7 @@ public class FSEditLog implements LogsPurgeable {
     
     final long lastTxId = getLastWrittenTxId();
     
-    //文件的关闭
+    //文件的关闭，结束一个segment文件，关闭以前，处于IN_SEGMENT状态，关闭以后到下个segment打开以前，处于BETWEEN_LOG_SEGMENTS状态
     try {
       journalSet.finalizeLogSegment(curSegmentTxId, lastTxId);
       editLogStream = null;

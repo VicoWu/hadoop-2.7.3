@@ -53,6 +53,7 @@ class JournalNodeRpcServer implements QJournalProtocol {
   private final JournalNode jn;
   private Server server;
 
+  //在JournalNode.start()方法中被构造
   JournalNodeRpcServer(Configuration conf, JournalNode jn) throws IOException {
     this.jn = jn;
     
@@ -141,6 +142,9 @@ class JournalNodeRpcServer implements QJournalProtocol {
     jn.getOrCreateJournal(journalId).format(nsInfo);
   }
 
+  /**
+   * active namenode通过调用这个接口向QjournalProtocol写入EditLog数据
+   */
   @Override
   public void journal(RequestInfo reqInfo,
       long segmentTxId, long firstTxnId,

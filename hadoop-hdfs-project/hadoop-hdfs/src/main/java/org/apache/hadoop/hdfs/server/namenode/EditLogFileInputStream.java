@@ -138,9 +138,9 @@ public class EditLogFileInputStream extends EditLogInputStream {
     Preconditions.checkState(state == State.UNINIT);
     BufferedInputStream bin = null;
     try {
-      fStream = log.getInputStream();
-      bin = new BufferedInputStream(fStream);
-      tracker = new FSEditLogLoader.PositionTrackingInputStream(bin);
+      fStream = log.getInputStream();//初始化远程文件读取流
+      bin = new BufferedInputStream(fStream);//将文件读取流封装到
+      tracker = new FSEditLogLoader.PositionTrackingInputStream(bin);//对InputSteam进行了封装，记录读取的位置
       dataIn = new DataInputStream(tracker);
       try {
         logVersion = readLogVersion(dataIn, verifyLayoutVersion);
@@ -450,6 +450,7 @@ public class EditLogFileInputStream extends EditLogInputStream {
       this.url = url;
     }
 
+    //基于http协议的文件读取
     @Override
     public InputStream getInputStream() throws IOException {
       return SecurityUtil.doAsCurrentUser(

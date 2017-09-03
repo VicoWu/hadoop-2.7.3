@@ -37,8 +37,10 @@ import com.google.common.base.Preconditions;
  */
 @InterfaceAudience.Private
 public class EditsDoubleBuffer {
-
+  
+  //当前正在进行数据写入的buf
   private TxnBuffer bufCurrent; // current buffer for writing
+  //当前正在进行数据输出的buf
   private TxnBuffer bufReady; // buffer ready for flushing
   private final int initBufferSize;
 
@@ -49,6 +51,11 @@ public class EditsDoubleBuffer {
 
   }
     
+  /**
+   * 在QuorumOutputStream.write()中被调用
+   * @param op
+   * @throws IOException
+   */
   public void writeOp(FSEditLogOp op) throws IOException {
     bufCurrent.writeOp(op);
   }
@@ -154,7 +161,7 @@ public class EditsDoubleBuffer {
     @Override
     public DataOutputBuffer reset() {
       super.reset();
-      firstTxId = HdfsConstants.INVALID_TXID;
+      firstTxId = HdfsConstants.INVALID_TXID;//缓存被清空的标记
       numTxns = 0;
       return this;
     }

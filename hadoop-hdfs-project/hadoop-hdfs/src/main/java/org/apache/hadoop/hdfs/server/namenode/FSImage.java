@@ -837,6 +837,7 @@ public class FSImage implements Closeable {
       FSEditLogLoader loader = new FSEditLogLoader(target, lastAppliedTxId);
       
       // Load latest edits
+      //遍历所有的edtiStream,将这个stream对应的EditLog文件读入本地
       for (EditLogInputStream editIn : editStreams) {
         LOG.info("Reading " + editIn + " expecting start txid #" +
               (lastAppliedTxId + 1));

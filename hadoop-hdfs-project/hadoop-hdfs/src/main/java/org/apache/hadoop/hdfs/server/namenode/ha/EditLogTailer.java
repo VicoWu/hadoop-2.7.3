@@ -98,7 +98,7 @@ public class EditLogTailer {
    * available to be read from.
    */
   private final long sleepTimeMs;
-  
+  //FSNamesystem.startStandbyServices()中被构造
   public EditLogTailer(FSNamesystem namesystem, Configuration conf) {
     this.tailerThread = new EditLogTailerThread();
     this.conf = conf;
@@ -211,6 +211,7 @@ public class EditLogTailer {
       }
       Collection<EditLogInputStream> streams;
       try {
+    	//从lastTxnId + 1开始拉取segment
         streams = editLog.selectInputStreams(lastTxnId + 1, 0, null, false);
       } catch (IOException ioe) {
         // This is acceptable. If we try to tail edits in the middle of an edits
@@ -229,6 +230,7 @@ public class EditLogTailer {
       // disk are ignored.
       long editsLoaded = 0;
       try {
+        //从远程拉取EditLog
         editsLoaded = image.loadEdits(streams, namesystem);
       } catch (EditLogInputException elie) {
         editsLoaded = elie.getNumEditsLoaded();
@@ -243,7 +245,7 @@ public class EditLogTailer {
       if (editsLoaded > 0) {
         lastLoadTimeMs = monotonicNow();
       }
-      lastLoadedTxnId = image.getLastAppliedTxId();
+      lastLoadedTxnId = image.getLastAppliedTxId();//记录同步过来的最后一个transactionId，代表当前Standby NameNode的同步位置
     } finally {
       namesystem.writeUnlock();
     }
@@ -310,7 +312,10 @@ public class EditLogTailer {
           // There's no point in triggering a log roll if the Standby hasn't
           // read any more transactions since the last time a roll was
           // triggered. 
-          if (tooLongSinceLastLoad() &&
+        	//如果已经超过指定时间没有从远程进行过doTailEdits操作，即很久没有拉取过非空的segment
+        	//并且，在上一次调用triggerActiveLogRoll到现在已经运行过doTailEdits，则调用一次triggerActiveLogRoll用来告知远程的Active NameNode
+           //进行一次roll操作，NameNode roll操作会告知QJM也进行roll操作，这样，Standby Namenode就可以拉取到这个segment
+        	if (tooLongSinceLastLoad() &&
               lastRollTriggerTxId < lastLoadedTxnId) {
             triggerActiveLogRoll();
           }
@@ -328,7 +333,7 @@ public class EditLogTailer {
           // state updates.
           namesystem.cpLockInterruptibly();
           try {
-            doTailEdits();
+            doTailEdits();//开始拉取远程的segment文件
           } finally {
             namesystem.cpUnlock();
           }

@@ -41,7 +41,7 @@ import com.google.common.collect.Lists;
 public class LocatedBlock {
 
   private final ExtendedBlock b;
-  private long offset;  // offset of the first byte of the block in the file
+  private long offset;  // offset of the first byte of the block in the file 数据块在对应文件中的偏移量
   private final DatanodeInfoWithStorage[] locs;
   /** Cached storage ID for each replica */
   private String[] storageIDs;

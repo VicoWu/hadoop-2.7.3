@@ -153,6 +153,16 @@ public class FSEditLogLoader {
     }
   }
 
+  /**
+   * 
+   * @param in 运行时具体实现类是EditLogFileInputStream，用来通过http访问远程文件
+   * @param closeOnExit
+   * @param expectedStartingTxId
+   * @param startOpt
+   * @param recovery
+   * @return
+   * @throws IOException
+   */
   long loadEditRecords(EditLogInputStream in, boolean closeOnExit,
       long expectedStartingTxId, StartupOption startOpt,
       MetaRecoveryContext recovery) throws IOException {
@@ -252,7 +262,7 @@ public class FSEditLogLoader {
           // applied, update our bookkeeping.
           incrOpCount(op.opCode, opCounts, step, counter);
           if (op.hasTransactionId()) {
-            lastAppliedTxId = op.getTransactionId();
+            lastAppliedTxId = op.getTransactionId(); //更新lastAppliedTxId，代表当前已经同步过来的TxId
             expectedTxId = lastAppliedTxId + 1;
           } else {
             expectedTxId = lastAppliedTxId = expectedStartingTxId;

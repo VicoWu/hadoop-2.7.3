@@ -102,6 +102,7 @@ public abstract class EditLogOutputStream implements Closeable {
   /**
    * Flush data to persistent store.
    * Collect sync metrics.
+   * 最终调用具体实现类的flushAndSync()方法，如QuorumOutputStream.flush()或者EditLogFileOutputStream.flush()
    */
   public void flush() throws IOException {
     flush(true);
@@ -110,7 +111,7 @@ public abstract class EditLogOutputStream implements Closeable {
   public void flush(boolean durable) throws IOException {
     numSync++;
     long start = monotonicNow();
-    flushAndSync(durable);
+    flushAndSync(durable);//QuorumOutputStream.flush()或者EditLogFileOutputStream.flush(
     long end = monotonicNow();
     totalTimeSync += (end - start);
   }

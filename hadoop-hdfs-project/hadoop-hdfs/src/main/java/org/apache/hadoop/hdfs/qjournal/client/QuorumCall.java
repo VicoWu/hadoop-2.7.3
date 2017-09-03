@@ -59,8 +59,13 @@ class QuorumCall<KEY, RESULT> {
    */
   private static final float WAIT_PROGRESS_WARN_THRESHOLD = 0.7f;
   
-  static <KEY, RESULT> QuorumCall<KEY, RESULT> create(
-      Map<KEY, ? extends ListenableFuture<RESULT>> calls) {
+  /**
+   * 将这些对Quorum的异步调用纳入到QuorumCall 对象的管理之内。如果异步调用发生了返回结果，则会调用addException
+   * 或者addResult方法来记录结果，调用者通过调用waitFor来获取结果
+   * @param calls
+   * @return
+   */
+  static <KEY, RESULT> QuorumCall<KEY, RESULT> create(Map<KEY, ? extends ListenableFuture<RESULT>> calls) {
     final QuorumCall<KEY, RESULT> qr = new QuorumCall<KEY, RESULT>();
     for (final Entry<KEY, ? extends ListenableFuture<RESULT>> e : calls.entrySet()) {
       Preconditions.checkArgument(e.getValue() != null,

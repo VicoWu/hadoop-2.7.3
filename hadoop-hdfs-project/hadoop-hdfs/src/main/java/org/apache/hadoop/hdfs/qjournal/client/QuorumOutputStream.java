@@ -31,7 +31,7 @@ import org.apache.hadoop.io.DataOutputBuffer;
 class QuorumOutputStream extends EditLogOutputStream {
   private final AsyncLoggerSet loggers;//使用AsyncLoggerSet来负责将新的editlog发送到远程JournalNode
   private EditsDoubleBuffer buf;//双缓存技术，可以让一个缓存的数据被flush out的同时，另外一个缓存的数据正在被写入，然后交换角色。
-  private final long segmentTxId;
+  private final long segmentTxId;//这是整个segment文件的Id，在FSEditLog.startLogSegment()中被设置
   private final int writeTimeoutMs;
 
   public QuorumOutputStream(AsyncLoggerSet loggers,
@@ -81,10 +81,10 @@ class QuorumOutputStream extends EditLogOutputStream {
 
   @Override
   protected void flushAndSync(boolean durable) throws IOException {
-    int numReadyBytes = buf.countReadyBytes();
+    int numReadyBytes = buf.countReadyBytes();// 已经处于ready状态的buf的大小
     if (numReadyBytes > 0) {
-      int numReadyTxns = buf.countReadyTxns();
-      long firstTxToFlush = buf.getFirstReadyTxId();
+      int numReadyTxns = buf.countReadyTxns();// readyBuffer中的操作数量大小
+      long firstTxToFlush = buf.getFirstReadyTxId();//这个Buffer中第一个OP的transactionId
 
       assert numReadyTxns > 0;
 
@@ -101,6 +101,7 @@ class QuorumOutputStream extends EditLogOutputStream {
       byte[] data = bufToSend.getData();
       assert data.length == bufToSend.getLength();
 
+      //通过AsyncLogger，将这些edit发送到远程
       QuorumCall<AsyncLogger, Void> qcall = loggers.sendEdits(
           segmentTxId, firstTxToFlush,
           numReadyTxns, data);

@@ -151,6 +151,7 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
 
     httpServerURI = httpServer.getServerURI().toString();
 
+    //启动RPCServer，用来接收ActiveNameNode写入Edit数据
     rpcServer = new JournalNodeRpcServer(conf, this);
     rpcServer.start();
   }

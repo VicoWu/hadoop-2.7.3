@@ -1267,7 +1267,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
     // Disable quota checks while in standby.
     dir.disableQuotaChecks();
-    editLogTailer = new EditLogTailer(this, conf);
+    editLogTailer = new EditLogTailer(this, conf);//创建一个editLogTailer线程，用来从远程的QJM服务器上拉取editlog
     editLogTailer.start();
     if (standbyShouldCheckpoint) {
       standbyCheckpointer = new StandbyCheckpointer(conf, this);

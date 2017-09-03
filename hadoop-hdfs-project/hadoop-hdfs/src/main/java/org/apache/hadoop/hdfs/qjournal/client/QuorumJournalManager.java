@@ -374,6 +374,15 @@ public class QuorumJournalManager implements JournalManager {
             logToSync.getEndTxId()));
   }
   
+  /**
+   * factory的默认实现是IPCLoggerChannel.FACTORY
+   * @param conf
+   * @param uri
+   * @param nsInfo
+   * @param factory
+   * @return
+   * @throws IOException
+   */
   static List<AsyncLogger> createLoggers(Configuration conf,
       URI uri, NamespaceInfo nsInfo, AsyncLogger.Factory factory)
           throws IOException {
@@ -388,10 +397,12 @@ public class QuorumJournalManager implements JournalManager {
  
   private static List<InetSocketAddress> getLoggerAddresses(URI uri)
       throws IOException {
+	//经过测试，如果URI是qjournal://10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485/datahdfsmaster，
+	  //则authority是10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485
     String authority = uri.getAuthority();
     Preconditions.checkArgument(authority != null && !authority.isEmpty(),
         "URI has no authority: " + uri);
-    
+    //Split以后，parts变成一个数组： [10.120.117.102,10.120.117.103,10.120.117.102]
     String[] parts = StringUtils.split(authority, ';');
     for (int i = 0; i < parts.length; i++) {
       parts[i] = parts[i].trim();
@@ -479,10 +490,12 @@ public class QuorumJournalManager implements JournalManager {
     loggers.close();
   }
 
+  //文件读取，用来从某个TxnId开始，获取某个文件的读取流，放到streams中
   @Override
   public void selectInputStreams(Collection<EditLogInputStream> streams,
       long fromTxnId, boolean inProgressOk) throws IOException {
-
+	//用来获取远程的EditLog的文件名的list，查看IPCLoggerChannel.getEditLogManifest
+	  //每一个AsyncLogger作为一个Key，value是向AsyncLogger对应的那个QuorumJournalNode返回的结果
     QuorumCall<AsyncLogger, RemoteEditLogManifest> q =
         loggers.getEditLogManifest(fromTxnId, inProgressOk);
     Map<AsyncLogger, RemoteEditLogManifest> resps =
@@ -502,6 +515,8 @@ public class QuorumJournalManager implements JournalManager {
       for (RemoteEditLog remoteLog : manifest.getLogs()) {
         URL url = logger.buildURLToFetchLogs(remoteLog.getStartTxId());
 
+        //构造了一个EditLogFileInputStream对象，一个EditLogFileInputStream对象与
+        //一个EditLog一一对应，因此，会有startTxId、endTxId属相，标识这个EditLog文件对应txId的起始位置
         EditLogInputStream elis = EditLogFileInputStream.fromUrl(
             connectionFactory, url, remoteLog.getStartTxId(),
             remoteLog.getEndTxId(), remoteLog.isInProgress());

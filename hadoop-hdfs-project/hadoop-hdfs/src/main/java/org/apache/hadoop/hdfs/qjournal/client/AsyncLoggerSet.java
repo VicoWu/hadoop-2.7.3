@@ -44,15 +44,18 @@ import com.google.common.util.concurrent.ListenableFuture;
  * Wrapper around a set of Loggers, taking care of fanning out
  * calls to the underlying loggers and constructing corresponding
  * {@link QuorumCall} instances.
+ * 一个AsyncLoggerSet对应了一个URI，比如qjournal://10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485/datahdfsmaster
+ * 此时每一个authority对应了一个IP:Port,比如10.120.117.102:8485，此时这个AsyncLoggerSet就含有三个AsyncLogger
  */
 class AsyncLoggerSet {
   static final Log LOG = LogFactory.getLog(AsyncLoggerSet.class);
 
-  private final List<AsyncLogger> loggers;
+  private final List<AsyncLogger> loggers;//默认的AsyncLogger实现类是IPCLoggerChannel，通过调用AsyncLogger.Factory().create进行构造
   
   private static final long INVALID_EPOCH = -1;
   private long myEpoch = INVALID_EPOCH;
   
+  //对应的QuorumJournalManager的构造函数中被构造出来
   public AsyncLoggerSet(List<AsyncLogger> loggers) {
     this.loggers = ImmutableList.copyOf(loggers);
   }
@@ -119,6 +122,7 @@ class AsyncLoggerSet {
    * @return a map of successful results
    * @throws QuorumException if a quorum doesn't respond with success
    * @throws IOException if the thread is interrupted or times out
+   * 需要等待大多说的Quorum对写进行了确认，才能认为写成功
    */
   <V> Map<AsyncLogger, V> waitForWriteQuorum(QuorumCall<AsyncLogger, V> q,
       int timeoutMs, String operationName) throws IOException {
@@ -254,6 +258,7 @@ class AsyncLoggerSet {
       long segmentTxId, long firstTxnId, int numTxns, byte[] data) {
     Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
     for (AsyncLogger logger : loggers) {
+      //默认的AsyncLogger实现类是IPCLoggerChannel，通过调用AsyncLogger.Factory().create进行构造
       ListenableFuture<Void> future = 
         logger.sendEdits(segmentTxId, firstTxnId, numTxns, data);
       calls.put(logger, future);
@@ -266,7 +271,7 @@ class AsyncLoggerSet {
     Map<AsyncLogger,
         ListenableFuture<RemoteEditLogManifest>> calls
         = Maps.newHashMap();
-    for (AsyncLogger logger : loggers) {
+    for (AsyncLogger logger : loggers) {//调用每一个AsyncLogger.getEditLogManifest()的异步方法
       ListenableFuture<RemoteEditLogManifest> future =
           logger.getEditLogManifest(fromTxnId, inProgressOk);
       calls.put(logger, future);

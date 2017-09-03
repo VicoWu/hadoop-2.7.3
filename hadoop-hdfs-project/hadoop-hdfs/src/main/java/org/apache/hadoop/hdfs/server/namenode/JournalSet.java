@@ -301,6 +301,12 @@ public class JournalSet implements JournalManager {
     chainAndMakeRedundantStreams(streams, allStreams, fromTxId);
   }
   
+  /**
+   * 
+   * @param outStreams
+   * @param allStreams 实现是EditLogFileInputStream
+   * @param fromTxId
+   */
   public static void chainAndMakeRedundantStreams(
       Collection<EditLogInputStream> outStreams,
       PriorityQueue<EditLogInputStream> allStreams, long fromTxId) {
