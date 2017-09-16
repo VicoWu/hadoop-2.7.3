@@ -140,6 +140,7 @@ public class Journal implements Closeable {
   Journal(Configuration conf, File logDir, String journalId,
       StartupOption startOpt, StorageErrorReporter errorReporter)
       throws IOException {
+	//在JournalNode.getOrCreateJournal中被创建
     storage = new JNStorage(conf, logDir, startOpt, errorReporter);
     this.journalId = journalId;
 
@@ -642,7 +643,8 @@ public class Journal implements Closeable {
     // No need to checkRequest() here - anyone may ask for the list
     // of segments.
     checkFormatted();
-    
+    //调用FileJournalManager.getRemoteEditLogs()，如果是从Standby Namenode调用，即通过QuorumJournalManager.selectInputStreams调用，
+    //inProgress=false
     List<RemoteEditLog> logs = fjm.getRemoteEditLogs(sinceTxId, inProgressOk);
     
     if (inProgressOk) {

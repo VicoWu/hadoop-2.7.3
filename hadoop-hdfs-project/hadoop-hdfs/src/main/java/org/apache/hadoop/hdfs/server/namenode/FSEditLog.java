@@ -228,7 +228,8 @@ public class FSEditLog implements LogsPurgeable {
    * 
    * @param conf The namenode configuration
    * @param storage Storage object used by namenode
-   * @param editsDirs List of journals to use ，这是通过FSNamesystem.getNamespaceEditsDirs(config)读取的
+   * @param editsDirs List of journals to use ，这是通过FSNamesystem.getNamespaceEditsDirs(config)读取的,
+   * 通过dfs.namenode.shared.edits.dir和dfs.namenode.edits.dir配置的本地和远程目录
    */
   FSEditLog(Configuration conf, NNStorage storage, List<URI> editsDirs) {
     isSyncRunning = false;//是否正在进行同步
@@ -239,13 +240,14 @@ public class FSEditLog implements LogsPurgeable {
      
     // If this list is empty, an error will be thrown on first use
     // of the editlog, as no journals will exist
-    this.editsDirs = Lists.newArrayList(editsDirs);//edit文件的List
+    this.editsDirs = Lists.newArrayList(editsDirs);//edit文件的List,sharedEditLog在本地的EditLog前面，这样保证写操作的时候sharedEditLog先完成，然后是写本地
     //sharedEdits指的就是我们配置的dfs.namenode.shared.edits.dir
     //除非是用逗号分隔，否则，sharedEditsDirs只有一个
     //比如qjournal://10.120.117.102:848510.120.117.103:8485;10.120.117.104:8485/datahdfsmaster，只是一个
     this.sharedEditsDirs = FSNamesystem.getSharedEditsDirs(conf);
   }
   
+  //在FSNamesystem.startActiveServices中被调用，只有ActiveNameNode才有写权限
   public synchronized void initJournalsForWrite() {
     Preconditions.checkState(state == State.UNINITIALIZED ||
         state == State.CLOSED, "Unexpected state: %s", state);
@@ -253,13 +255,9 @@ public class FSEditLog implements LogsPurgeable {
     initJournals(this.editsDirs);
     state = State.BETWEEN_LOG_SEGMENTS;
   }
-  
-  public static void main(String[] args){
-	 URI uri =  URI.create("qjournal://10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485/datahdfsmaster");
-	 System.out.println(uri.getAuthority());;
-  }
+
   /**
-   * 初始化QuorumJournalManager
+   * 初始化QuorumJournalManager,在FSNamesystem.startStandbyServices和FSImage.initEditLog中被调用
    */
   public synchronized void initSharedJournalsForRead() {
     if (state == State.OPEN_FOR_READING) {
@@ -321,7 +319,11 @@ public class FSEditLog implements LogsPurgeable {
   Collection<URI> getEditURIs() {
     return editsDirs;
   }
-
+  
+  public static void main(String[] args){
+	 URI uri =  URI.create("qjournal://10.120.117.102:8485;10.120.117.103:8485;10.120.117.104:8485/datahdfsmaster");
+	 System.out.println(uri.getAuthority());;
+  }
   /**
    * Initialize the output stream for logging, opening the first
    * log segment.
@@ -336,7 +338,7 @@ public class FSEditLog implements LogsPurgeable {
     // newer txids readable.
     List<EditLogInputStream> streams = new ArrayList<EditLogInputStream>();
     journalSet.selectInputStreams(streams, segmentTxId, true);
-    if (!streams.isEmpty()) {
+    if (!streams.isEmpty()) {//检查是否有read stream，如果有，则抛出异常
       String error = String.format("Cannot start writing at txid %s " +
         "when there is a stream available for read: %s",
         segmentTxId, streams.get(0));
@@ -344,7 +346,7 @@ public class FSEditLog implements LogsPurgeable {
       throw new IllegalStateException(error);
     }
     
-    startLogSegment(segmentTxId, true);
+    startLogSegment(segmentTxId, true);//从segmentTxId创建一个segment的写句柄
     assert state == State.IN_SEGMENT : "Bad state: " + state;
   }
   
@@ -955,6 +957,7 @@ public class FSEditLog implements LogsPurgeable {
    * Add delete file record to edit log
    */
   void logDelete(String src, long timestamp, boolean toLogRpcIds) {
+	 // 创建封装了删除操作的对象
     DeleteOp op = DeleteOp.getInstance(cache.get())
       .setPath(src)
       .setTimestamp(timestamp);
@@ -1575,6 +1578,7 @@ public class FSEditLog implements LogsPurgeable {
       selectInputStreams(streams, fromTxId, inProgressOk);
     }
 
+    //这里的streams既包括多远程文件的read stream，也包括对本地文件的read stream
     try {
       checkForGaps(streams, fromTxId, toAtLeastTxId, inProgressOk);
     } catch (IOException e) {

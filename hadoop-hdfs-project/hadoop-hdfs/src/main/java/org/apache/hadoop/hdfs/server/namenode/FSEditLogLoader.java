@@ -136,10 +136,10 @@ public class FSEditLogLoader {
     StartupProgress prog = NameNode.getStartupProgress();
     Step step = createStartupProgressStep(edits);
     prog.beginStep(Phase.LOADING_EDITS, step);
-    fsNamesys.writeLock();
+    fsNamesys.writeLock();//具有写拍他特性的锁，避免其它线程同时进行写操作
     try {
       long startTime = monotonicNow();
-      FSImage.LOG.info("Start loading edits file " + edits.getName());
+      FSImage.LOG.info("Start loading edits file " + edits.getName());//getName()调用的是EditLogFileInputStream.getName()方法
       long numEdits = loadEditRecords(edits, false, expectedStartingTxId,
           startOpt, recovery);
       FSImage.LOG.info("Edits file " + edits.getName() 
@@ -155,7 +155,8 @@ public class FSEditLogLoader {
 
   /**
    * 
-   * @param in 运行时具体实现类是EditLogFileInputStream，用来通过http访问远程文件
+   * @param in 运行时具体实现类是EditLogFileInputStream，经过QuorumJournalManager.selectInputStreams，
+   * 可以看到这个实现类经过stream合并，变成了RedundantEditLogInputStream，用来通过http访问远程文件
    * @param closeOnExit
    * @param expectedStartingTxId
    * @param startOpt
@@ -175,7 +176,7 @@ public class FSEditLogLoader {
       LOG.trace("Acquiring write lock to replay edit log");
     }
 
-    fsNamesys.writeLock();
+    fsNamesys.writeLock();//由于是可重入锁，因此允许同一线程的多次加锁
     fsDir.writeLock();
 
     long recentOpcodeOffsets[] = new long[4];
@@ -207,11 +208,12 @@ public class FSEditLogLoader {
             String errorMessage =
               formatEditLogReplayError(in, recentOpcodeOffsets, expectedTxId);
             FSImage.LOG.error(errorMessage, e);
-            if (recovery == null) {
+            if (recovery == null) {//正常的Standby NameNode同步，recovery=null，此时直接抛出异常
                // We will only try to skip over problematic opcodes when in
                // recovery mode.
               throw new EditLogInputException(errorMessage, e, numEdits);
             }
+            //如果处于recovery模式下，则为用户提供恢复选择
             MetaRecoveryContext.editLogLoaderPrompt(
                 "We failed to read txId " + expectedTxId,
                 recovery, "skipping the bad section in the log");
@@ -221,13 +223,13 @@ public class FSEditLogLoader {
           recentOpcodeOffsets[(int)(numEdits % recentOpcodeOffsets.length)] =
             in.getPosition();
           if (op.hasTransactionId()) {
-            if (op.getTransactionId() > expectedTxId) { 
+            if (op.getTransactionId() > expectedTxId) { //如果读取的txId小于期望的txId，那么这中间的差值直接忽略，why？
               MetaRecoveryContext.editLogLoaderPrompt("There appears " +
                   "to be a gap in the edit log.  We expected txid " +
                   expectedTxId + ", but got txid " +
                   op.getTransactionId() + ".", recovery, "ignoring missing " +
                   " transaction IDs");
-            } else if (op.getTransactionId() < expectedTxId) { 
+            } else if (op.getTransactionId() < expectedTxId) { //如果读取的txId小于期望的txId，则什么也不做，继续往下读取
               MetaRecoveryContext.editLogLoaderPrompt("There appears " +
                   "to be an out-of-order edit in the edit log.  We " +
                   "expected txid " + expectedTxId + ", but got txid " +

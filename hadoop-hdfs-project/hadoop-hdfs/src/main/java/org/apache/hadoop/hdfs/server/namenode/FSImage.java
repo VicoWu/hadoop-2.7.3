@@ -127,9 +127,10 @@ public class FSImage implements Closeable {
    * Setup storage and initialize the edit log.
    *
    * @param conf Configuration
-   * @param imageDirs Directories the image can be stored in.
-   * @param editsDirs Directories the editlog can be stored in.
+   * @param imageDirs Directories the image can be stored in. dfs.namenode.name.dir所配置的存放img和EditLog文件的目录
+   * @param editsDirs Directories the editlog can be stored in. 通过dfs.namenode.shared.edits.dir和dfs.namenode.edits.dir配置的本地和远程目录
    * @throws IOException if directories are invalid.
+   * 查看FSNamesystem.loadFromDisk
    */
   protected FSImage(Configuration conf,
                     Collection<URI> imageDirs,
@@ -137,13 +138,14 @@ public class FSImage implements Closeable {
       throws IOException {
     this.conf = conf;
 
+    //NameNode端的存储，包括Img文件和Editlog文件的存储和管理都交给NNStorage对象进行管理
     storage = new NNStorage(conf, imageDirs, editsDirs);
     if(conf.getBoolean(DFSConfigKeys.DFS_NAMENODE_NAME_DIR_RESTORE_KEY,
                        DFSConfigKeys.DFS_NAMENODE_NAME_DIR_RESTORE_DEFAULT)) {
       storage.setRestoreFailedStorage(true);
     }
 
-    this.editLog = new FSEditLog(conf, storage, editsDirs);
+    this.editLog = new FSEditLog(conf, storage, editsDirs);//editsDirs包含了本地的editsLog文件目录和远程的有3个以上的JournalNode组成的Quorum
     
     archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
   }
@@ -286,7 +288,7 @@ public class FSImage implements Closeable {
     case ROLLBACK:
       throw new AssertionError("Rollback is now a standalone command, "
           + "NameNode should not be starting with this option.");
-    case REGULAR:
+    case REGULAR://如果是常规启动，这里什么都不做
     default:
       // just load the image
     }
@@ -767,11 +769,11 @@ public class FSImage implements Closeable {
     Preconditions.checkState(getNamespaceID() != 0,
         "Must know namespace ID before initting edit log");
     String nameserviceId = DFSUtil.getNamenodeNameServiceId(conf);
-    if (!HAUtil.isHAEnabled(conf, nameserviceId)) {
+    if (!HAUtil.isHAEnabled(conf, nameserviceId)) {//如果没有打开HA模式
       // If this NN is not HA
       editLog.initJournalsForWrite();
       editLog.recoverUnclosedStreams();
-    } else if (HAUtil.isHAEnabled(conf, nameserviceId)
+    } else if (HAUtil.isHAEnabled(conf, nameserviceId)//如果打开了HA模式，并且是UPGRADE、UPGRADEONLY或者ROLLBACK操作
         && (startOpt == StartupOption.UPGRADE
             || startOpt == StartupOption.UPGRADEONLY
             || RollingUpgradeStartupOption.ROLLBACK.matches(startOpt))) {
@@ -838,15 +840,17 @@ public class FSImage implements Closeable {
       
       // Load latest edits
       //遍历所有的edtiStream,将这个stream对应的EditLog文件读入本地
+      //每一个editIn对象是一个RedundantEditLogInputStream对象。可以搜索在standby namenode日志搜‘ expecting start txid’
       for (EditLogInputStream editIn : editStreams) {
         LOG.info("Reading " + editIn + " expecting start txid #" +
               (lastAppliedTxId + 1));
         try {
+          //loader会不断从远程读取新的op，同时从op中提取txId来更新自己的txId，从而让StandbyNamenode的txid逐渐向前递增
           loader.loadFSEdits(editIn, lastAppliedTxId + 1, startOpt, recovery);
         } finally {
           // Update lastAppliedTxId even in case of error, since some ops may
           // have been successfully applied before the error.
-          lastAppliedTxId = loader.getLastAppliedTxId();
+          lastAppliedTxId = loader.getLastAppliedTxId();//从loader中获取当前已经load过来的最新的txId,更新到FSImage对象
         }
         // If we are in recovery mode, we may have skipped over some txids.
         if (editIn.getLastTxId() != HdfsConstants.INVALID_TXID) {

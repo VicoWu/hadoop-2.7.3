@@ -204,7 +204,7 @@ public class EditLogTailer {
     try {
       FSImage image = namesystem.getFSImage();
 
-      long lastTxnId = image.getLastAppliedTxId();
+      long lastTxnId = image.getLastAppliedTxId();//Standby NameNode当前已经有的最大的TxId
       
       if (LOG.isDebugEnabled()) {
         LOG.debug("lastTxnId: " + lastTxnId);
@@ -212,7 +212,7 @@ public class EditLogTailer {
       Collection<EditLogInputStream> streams;
       try {
     	//从lastTxnId + 1开始拉取segment
-        streams = editLog.selectInputStreams(lastTxnId + 1, 0, null, false);
+        streams = editLog.selectInputStreams(lastTxnId + 1, 0, null, false);//false代表不允许获取处于in-progress状态的文件
       } catch (IOException ioe) {
         // This is acceptable. If we try to tail edits in the middle of an edits
         // log roll, i.e. the last one has been finalized but the new inprogress

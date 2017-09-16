@@ -185,7 +185,7 @@ class JournalNodeRpcServer implements QJournalProtocol {
   public GetEditLogManifestResponseProto getEditLogManifest(String jid,
       long sinceTxId, boolean inProgressOk)
       throws IOException {
-    
+    //
     RemoteEditLogManifest manifest = jn.getOrCreateJournal(jid)
         .getEditLogManifest(sinceTxId, inProgressOk);
     

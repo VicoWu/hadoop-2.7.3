@@ -813,7 +813,7 @@ public class NameNode implements NameNodeStatusMXBean {
       try {
         haContext.writeLock();
         state.prepareToEnterState(haContext);
-        state.enterState(haContext);
+        state.enterState(haContext);//进入Active状态，则是ActiveState,否则，是StandbyState
       } finally {
         haContext.writeUnlock();
       }
@@ -830,9 +830,9 @@ public class NameNode implements NameNodeStatusMXBean {
   protected HAState createHAState(StartupOption startOpt) {
     if (!haEnabled || startOpt == StartupOption.UPGRADE 
         || startOpt == StartupOption.UPGRADEONLY) {
-      return ACTIVE_STATE;
+      return ACTIVE_STATE;//如果没有打开HA，或者启动模式为UPGRADE,或UPGRADEONLY或者upgradeOnly,则直接进入Active状态
     } else {
-      return STANDBY_STATE;
+      return STANDBY_STATE;//正常启动，先进入standby状态,随后的状态切换有ZKFC的becomdeStandby等借口决定
     }
   }
 

@@ -496,6 +496,8 @@ public class QuorumJournalManager implements JournalManager {
       long fromTxnId, boolean inProgressOk) throws IOException {
 	//用来获取远程的EditLog的文件名的list，查看IPCLoggerChannel.getEditLogManifest
 	  //每一个AsyncLogger作为一个Key，value是向AsyncLogger对应的那个QuorumJournalNode返回的结果
+	//inProgressOk=false，代表不允许获取处于in-progress状态的editLog，
+	  //查看QJournalProtocolServerSideTranslatorPB.getEditLogManifest()，其中impl的运行时实现是JournalNodeRpcServer
     QuorumCall<AsyncLogger, RemoteEditLogManifest> q =
         loggers.getEditLogManifest(fromTxnId, inProgressOk);
     Map<AsyncLogger, RemoteEditLogManifest> resps =
@@ -505,13 +507,16 @@ public class QuorumJournalManager implements JournalManager {
     LOG.debug("selectInputStream manifests:\n" +
         Joiner.on("\n").withKeyValueSeparator(": ").join(resps));
     
+    //指定了一个基于堆排序的有序queue，是一个小顶堆
+    //基于 JournalSet.EDIT_LOG_INPUT_STREAM_COMPARATOR这个comparator，对这个queue进行遍历的时候，
+    //优先级是：firstTxId从大到校，lastTxId从小到大
     final PriorityQueue<EditLogInputStream> allStreams = 
         new PriorityQueue<EditLogInputStream>(64,
             JournalSet.EDIT_LOG_INPUT_STREAM_COMPARATOR);
     for (Map.Entry<AsyncLogger, RemoteEditLogManifest> e : resps.entrySet()) {
       AsyncLogger logger = e.getKey();
       RemoteEditLogManifest manifest = e.getValue();
-      
+      //对于每一个远程的editLog文件，创建与之一一对应的stream，准备用来进行文件读取
       for (RemoteEditLog remoteLog : manifest.getLogs()) {
         URL url = logger.buildURLToFetchLogs(remoteLog.getStartTxId());
 
@@ -523,6 +528,7 @@ public class QuorumJournalManager implements JournalManager {
         allStreams.add(elis);
       }
     }
+    //对allStreams中的对象进行合并，得到streams的实现类是RedundantEditLogInputStream
     JournalSet.chainAndMakeRedundantStreams(streams, allStreams, fromTxnId);
   }
   

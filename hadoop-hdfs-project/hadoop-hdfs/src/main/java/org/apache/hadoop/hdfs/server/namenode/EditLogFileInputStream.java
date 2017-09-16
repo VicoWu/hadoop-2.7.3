@@ -91,6 +91,7 @@ public class EditLogFileInputStream extends EditLogInputStream {
 
   /**
    * Open an EditLogInputStream for the given file.
+   * 这是用在构造对EditLog文件的读取流，可以看FileJournalManager
    * @param name filename to open
    * @param firstTxId first transaction found in file
    * @param lastTxId last transaction id found in file
@@ -102,7 +103,7 @@ public class EditLogFileInputStream extends EditLogInputStream {
   
   /**
    * Open an EditLogInputStream for the given URL.
-   *
+   * 这主要用来构造对远程JournalNode上的文件的读取流，可以看QuorumJournalManager
    * @param connectionFactory
    *          the URLConnectionFactory used to create the connection.
    * @param url

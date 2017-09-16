@@ -670,8 +670,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
     checkConfiguration(conf);
     FSImage fsImage = new FSImage(conf,
-        FSNamesystem.getNamespaceDirs(conf),
-        FSNamesystem.getNamespaceEditsDirs(conf));
+        FSNamesystem.getNamespaceDirs(conf),//dfs.namenode.name.dir所配置的存放img和EditLog文件的目录
+        FSNamesystem.getNamespaceEditsDirs(conf));//通过dfs.namenode.shared.edits.dir和dfs.namenode.edits.dir配置的本地和远程目录
     FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
@@ -959,6 +959,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     return Collections.unmodifiableList(auditLoggers);
   }
 
+  /**
+   * 读取配置文件，纳入到FSImage的管理中
+   * @param startOpt
+   * @throws IOException
+   */
   private void loadFSImage(StartupOption startOpt) throws IOException {
     final FSImage fsImage = getFSImage();
 
@@ -998,7 +1003,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       // we shouldn't do it when coming up in standby state
       if (!haEnabled || (haEnabled && startOpt == StartupOption.UPGRADE)
           || (haEnabled && startOpt == StartupOption.UPGRADEONLY)) {
-        fsImage.openEditLogForWrite();
+        fsImage.openEditLogForWrite();//开始打开一个edit log文件，准备进行写操作
       }
       success = true;
     } finally {
@@ -1105,7 +1110,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     LOG.info("Starting services required for active state");
     writeLock();
     try {
-      FSEditLog editLog = getFSImage().getEditLog();
+      FSEditLog editLog = getFSImage().getEditLog();//获取EditLog对象
       
       if (!editLog.isOpenForWrite()) {
         // During startup, we're already open for write during initialization.
@@ -1270,7 +1275,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     editLogTailer = new EditLogTailer(this, conf);//创建一个editLogTailer线程，用来从远程的QJM服务器上拉取editlog
     editLogTailer.start();
     if (standbyShouldCheckpoint) {
-      standbyCheckpointer = new StandbyCheckpointer(conf, this);
+      standbyCheckpointer = new StandbyCheckpointer(conf, this);//独立线程，用来不断进行checkpoint操作
       standbyCheckpointer.start();
     }
   }
@@ -1358,7 +1363,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
   
   public static Collection<URI> getNamespaceDirs(Configuration conf) {
-    return getStorageDirs(conf, DFS_NAMENODE_NAME_DIR_KEY);
+    return getStorageDirs(conf, DFS_NAMENODE_NAME_DIR_KEY);//存放img文件和EditLog文件
   }
 
   /**
@@ -1422,6 +1427,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * is retained.
    * @return Collection of shared edits directories.
    * @throws IOException if multiple shared edits directories are configured
+   * 获取EditLog的目录，包括本地的和共享的EditLog目录，其中，共享的EditLog目录排在本地目录之前，确保在写数据的时候，如果开始写本地，那么一定是
+   * 共享已经完成了写操作
    */
   public static List<URI> getNamespaceEditsDirs(Configuration conf)
       throws IOException {
@@ -1436,7 +1443,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     LinkedHashSet<URI> editsDirs = new LinkedHashSet<URI>();
     
     if (includeShared) {
-      List<URI> sharedDirs = getSharedEditsDirs(conf);
+      List<URI> sharedDirs = getSharedEditsDirs(conf);//获取dfs.namenode.shared.edits.dir配合的共享的NameNodeDir
   
       // Fail until multiple shared edits directories are supported (HDFS-2782)
       if (sharedDirs.size() > 1) {
@@ -1448,6 +1455,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       // are added first, since JournalSet syncs them in the order they are listed,
       // and we need to make sure all edits are in place in the shared storage
       // before they are replicated locally. See HDFS-2874.
+      //SharedDir必须在本地dir的前面，保证在写入操作的时候，写入到远程在写入到本地之前
       for (URI dir : sharedDirs) {
         if (!editsDirs.add(dir)) {
           LOG.warn("Edits URI " + dir + " listed multiple times in " + 
@@ -1456,6 +1464,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     }    
     // Now add the non-shared dirs.
+    ////读取dfs.namenode.edits.dir配置项 ， 默认不配置的情况下，dfs.namenode.edits.dir使用dfs.namenode.name.dir的值
     for (URI dir : getStorageDirs(conf, DFS_NAMENODE_EDITS_DIR_KEY)) {
       if (!editsDirs.add(dir)) {
         LOG.warn("Edits URI " + dir + " listed multiple times in " + 

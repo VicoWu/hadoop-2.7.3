@@ -69,6 +69,28 @@ public class JournalSet implements JournalManager {
     }
   };
   
+
+  public static void main(String[] args){
+	   Comparator<Integer>
+	    testComparator = new Comparator<Integer>() {
+	    @Override
+	    public int compare(Integer a, Integer b) {
+	      // we want local logs to be ordered earlier in the collection, and true
+	      // is considered larger than false, so we want to invert the booleans here
+	      return ComparisonChain.start().compare(!(a<5),
+	          !(b<5)).result();
+	    }
+	  };
+	  List<Integer> list =new LinkedList<Integer>();
+	  list.add(1);
+	  list.add(7);
+	  list.add(2);
+	  list.add(8);
+	  Collections.sort(list, testComparator);
+	  for(Integer i:list){
+		  System.out.println(i);
+	  }
+  }
   static final public Comparator<EditLogInputStream>
     EDIT_LOG_INPUT_STREAM_COMPARATOR = new Comparator<EditLogInputStream>() {
       @Override
@@ -283,6 +305,8 @@ public class JournalSet implements JournalManager {
   @Override
   public void selectInputStreams(Collection<EditLogInputStream> streams,
       long fromTxId, boolean inProgressOk) throws IOException {
+	//这个allStreams中保存了对本地和远程的读取流，这里的stream经过了EDIT_LOG_INPUT_STREAM_COMPARATOR定义的顺序进行了排序，
+	  //start txId越小越靠前，end txId越大越靠前
     final PriorityQueue<EditLogInputStream> allStreams = 
         new PriorityQueue<EditLogInputStream>(64,
             EDIT_LOG_INPUT_STREAM_COMPARATOR);
@@ -292,20 +316,29 @@ public class JournalSet implements JournalManager {
         continue;
       }
       try {
+    	//这里的manager既包括了本地的FileJournalManager,也包括了远程的QuorumJournalManager
         jas.getManager().selectInputStreams(allStreams, fromTxId, inProgressOk);
       } catch (IOException ioe) {
         LOG.warn("Unable to determine input streams from " + jas.getManager() +
             ". Skipping.", ioe);
       }
     }
+    //注意，allStreams已经进行了排序，EDIT_LOG_INPUT_STREAM_COMPARATOR定义的顺序进行了排序，
+	  //start txId越小越靠前，end txId越大越靠前
     chainAndMakeRedundantStreams(streams, allStreams, fromTxId);
   }
   
   /**
-   * 
+   * 这个方法会遍历目前所有的stream，将这些stream进行排序，将本地的stream排在远程的stream前面
+   * 同时，有可能某些stream的start txId相同，这时候，会为这些stream构造出一个RedundantEditLogInputStream，
+   * 即做了一个副本stream，这样，读取的时候，万一某个stream出现问题，可以使用另外一个或者多个副本进行读取，同样，RedundantEditLogInputStream
+   * 中维护的多个互为副本的stream，也是遵循本地stream优先的
    * @param outStreams
    * @param allStreams 实现是EditLogFileInputStream
    * @param fromTxId
+   * 注意，allStreams已经进行了排序，EDIT_LOG_INPUT_STREAM_COMPARATOR定义的顺序进行了排序，
+	 start txId越小越靠前，end txId越大越靠前
+	 
    */
   public static void chainAndMakeRedundantStreams(
       Collection<EditLogInputStream> outStreams,
@@ -332,19 +365,20 @@ public class JournalSet implements JournalManager {
             if (accFirst.isInProgress()) {
               acc.add(elis);
             }
-          } else {
+          } else {//当前的这个stream文件是一个finalized segment
             if (accFirst.isInProgress()) {
-              acc.clear();
+              acc.clear();//丢弃所有处于in-progress的文件
             }
-            acc.add(elis);
+            acc.add(elis);//添加这个处于finalized的文件
           }
         } else if (accFirstTxId < elis.getFirstTxId()) {
           // try to read from the local logs first since the throughput should
           // be higher
           Collections.sort(acc, LOCAL_LOG_PREFERENCE_COMPARATOR);
+          //将acc拷贝了一份出来，转换成RedundantEditLogInputStream，加入到outStreams中
           outStreams.add(new RedundantEditLogInputStream(acc, fromTxId));
-          acc.clear();
-          acc.add(elis);
+          acc.clear();//清空当前的列表
+          acc.add(elis);//把当前的stream加入到acc中，也就是从这个txId更大的stream开始
         } else if (accFirstTxId > elis.getFirstTxId()) {
           throw new RuntimeException("sorted set invariants violated!  " +
               "Got stream with first txid " + elis.getFirstTxId() +

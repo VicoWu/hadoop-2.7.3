@@ -83,8 +83,9 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
       throws IOException {
     QuorumJournalManager.checkJournalId(jid);
     
+    //JournalNode可以同时为多个HDFS集群提供服务，JournalNode为一个集群维护一个Journal对象
     Journal journal = journalsById.get(jid);
-    if (journal == null) {
+    if (journal == null) {//如果没有对一个的Journal，则创建一个Journal对象
       File logDir = getLogDir(jid);
       LOG.info("Initializing journal in directory " + logDir);      
       journal = new Journal(conf, logDir, jid, startOpt, new ErrorReporter());
@@ -235,6 +236,7 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
         !jid.isEmpty(),
         "bad journal identifier: %s", jid);
     assert jid != null;
+    //一个JournalNode可以同时为多个集群提供Journal服务，通过dfs.journalnode.edits.dir配置根目录，通过jid设置子目录
     return new File(new File(dir), jid);
   }
 

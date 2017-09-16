@@ -182,15 +182,15 @@ public class FileJournalManager implements JournalManager {
    */
   public List<RemoteEditLog> getRemoteEditLogs(long firstTxId,
       boolean inProgressOk) throws IOException {
-    File currentDir = sd.getCurrentDir();
-    List<EditLogFile> allLogFiles = matchEditLogs(currentDir);
+    File currentDir = sd.getCurrentDir();//获取当前这个Journal对应的存放EditLog的目录
+    List<EditLogFile> allLogFiles = matchEditLogs(currentDir);//通过正则匹配获取候选的EditLogFile
     List<RemoteEditLog> ret = Lists.newArrayListWithCapacity(
         allLogFiles.size());
     for (EditLogFile elf : allLogFiles) {
       if (elf.hasCorruptHeader() || (!inProgressOk && elf.isInProgress())) {
         continue;
       }
-      if (elf.isInProgress()) {
+      if (elf.isInProgress()) {//如果isInProgress，表示允许返回处于in-progress状态的editLog
         try {
           elf.validateLog();
         } catch (IOException e) {
@@ -199,7 +199,7 @@ public class FileJournalManager implements JournalManager {
           continue;
         }
       }
-      if (elf.getFirstTxId() >= firstTxId) {
+      if (elf.getFirstTxId() >= firstTxId) {//如果当前的segment的第一个txid大于所请求的txId，则加入到返回结果中
         ret.add(new RemoteEditLog(elf.firstTxId, elf.lastTxId,
             elf.isInProgress()));
       } else if (elf.getFirstTxId() < firstTxId && firstTxId <= elf.getLastTxId()) {
