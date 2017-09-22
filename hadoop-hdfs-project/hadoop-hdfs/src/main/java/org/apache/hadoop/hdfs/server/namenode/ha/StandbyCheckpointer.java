@@ -355,7 +355,7 @@ public class StandbyCheckpointer {
             // reset needRollbackCheckpoint to false only when we finish a ckpt
             // for rollback image
             if (needRollbackCheckpoint
-                && namesystemx.getFSImage().hasRollbackFSImage()) {
+                && namesystem.getFSImage().hasRollbackFSImage()) {
               namesystem.setCreatedRollbackImages(true);
               namesystem.setNeedRollbackFsImage(false);
             }
