@@ -55,9 +55,9 @@ import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.conf.*;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.Time;
-import org.apache.hadoop.yarn.server.api.ResourceTrackerPB;
 
 import com.google.protobuf.BlockingService;
+
 
 /** A simple RPC mechanism.
  *
