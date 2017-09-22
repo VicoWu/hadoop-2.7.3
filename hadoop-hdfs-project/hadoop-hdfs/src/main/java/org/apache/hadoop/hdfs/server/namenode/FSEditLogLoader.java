@@ -217,7 +217,7 @@ public class FSEditLogLoader {
             MetaRecoveryContext.editLogLoaderPrompt(
                 "We failed to read txId " + expectedTxId,
                 recovery, "skipping the bad section in the log");
-            in.resync();
+            in.resync();//发生了异常，跳过
             continue;
           }
           recentOpcodeOffsets[(int)(numEdits % recentOpcodeOffsets.length)] =

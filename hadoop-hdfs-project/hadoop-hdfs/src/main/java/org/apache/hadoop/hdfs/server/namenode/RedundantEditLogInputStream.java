@@ -154,6 +154,7 @@ class RedundantEditLogInputStream extends EditLogInputStream {
     IOUtils.cleanup(LOG,  streams);
   }
 
+  //读取下一个可用的op操作
   @Override
   protected FSEditLogOp nextValidOp() {
     try {
@@ -170,7 +171,7 @@ class RedundantEditLogInputStream extends EditLogInputStream {
   protected FSEditLogOp nextOp() throws IOException {
     while (true) {
       switch (state) {
-      case SKIP_UNTIL:
+      case SKIP_UNTIL://从构造函数可以看到，初始化状态为SKIP_UNTIL,第一次读取的时候，都会打印下面的LOG.info("Fast-forwarding stream 日志
        try {
           if (prevTxId != HdfsConstants.INVALID_TXID) {
             LOG.info("Fast-forwarding stream '" + streams[curIdx].getName() +
@@ -225,7 +226,7 @@ class RedundantEditLogInputStream extends EditLogInputStream {
         state = State.SKIP_UNTIL;
         break;
       case STREAM_FAILED_RESYNC:
-        if (curIdx + 1 == streams.length) {
+        if (curIdx + 1 == streams.length) {//当前读取的这个stream已经是备份stream中的最后一个了
           if (prevException instanceof PrematureEOFException) {
             // bypass early EOF check
             state = State.EOF;
@@ -235,7 +236,7 @@ class RedundantEditLogInputStream extends EditLogInputStream {
           }
         } else {
           LOG.error("failing over to edit log " +
-              streams[curIdx + 1].getName());
+              streams[curIdx + 1].getName());//还有备份的strema，则尝试读取备份的stream
           curIdx++;
           state = State.SKIP_UNTIL;
         }

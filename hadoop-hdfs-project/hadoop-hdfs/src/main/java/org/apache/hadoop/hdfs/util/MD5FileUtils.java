@@ -163,6 +163,12 @@ public abstract class MD5FileUtils {
     }
   }
 
+  /**
+   *
+   * @param oldDataFile
+   * @param newDataFile
+   * @throws IOException
+   */
   public static void renameMD5File(File oldDataFile, File newDataFile)
       throws IOException {
     final File fromFile = getDigestFileForFile(oldDataFile);

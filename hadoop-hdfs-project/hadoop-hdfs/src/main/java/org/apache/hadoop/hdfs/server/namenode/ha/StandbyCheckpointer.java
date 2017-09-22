@@ -158,7 +158,7 @@ public class StandbyCheckpointer {
     // that modifies namesystem on standby node is edit log replaying.
     namesystem.cpLockInterruptibly();
     try {
-      assert namesystem.getEditLog().isOpenForRead() :
+      assert namesystem.getEditLog().isOpenForRead() : //状态检查，预期情况下，StandBy NameNode所维护的editlog应该是处于open for read状态，这是StandBy NameNode启动以后的持续状态
         "Standby Checkpointer should only attempt a checkpoint when " +
         "NN is in standby mode, but the edit logs are in an unexpected state";
       
@@ -199,6 +199,7 @@ public class StandbyCheckpointer {
     // Upload the saved checkpoint back to the active
     // Do this in a separate thread to avoid blocking transition to active
     // See HDFS-4816
+    //采用异步方式，将当前的img文件发送到远程的Active NameNode
     ExecutorService executor =
         Executors.newSingleThreadExecutor(uploadThreadFactory);
     Future<Void> upload = executor.submit(new Callable<Void>() {
@@ -326,13 +327,13 @@ public class StandbyCheckpointer {
           boolean needCheckpoint = needRollbackCheckpoint;
           if (needCheckpoint) {
             LOG.info("Triggering a rollback fsimage for rolling upgrade.");
-          } else if (uncheckpointed >= checkpointConf.getTxnCount()) {
+          } else if (uncheckpointed >= checkpointConf.getTxnCount()) { //如果超过了dfs.namenode.checkpoint.txns所配置的最大的未checkpoint数量，者需要进行checkpoint操作
             LOG.info("Triggering checkpoint because there have been " + 
                 uncheckpointed + " txns since the last checkpoint, which " +
                 "exceeds the configured threshold " +
                 checkpointConf.getTxnCount());
             needCheckpoint = true;
-          } else if (secsSinceLast >= checkpointConf.getPeriod()) {
+          } else if (secsSinceLast >= checkpointConf.getPeriod()) {//如果超过了dfs.namenode.checkpoint.period配置的最大的未checkpoint时长，则需要进行checkpoint操作
             LOG.info("Triggering checkpoint because it has been " +
                 secsSinceLast + " seconds since the last checkpoint, which " +
                 "exceeds the configured interval " + checkpointConf.getPeriod());
@@ -350,11 +351,11 @@ public class StandbyCheckpointer {
           }
           
           if (needCheckpoint) {
-            doCheckpoint();
+            doCheckpoint();//开始进行checkpoint操作
             // reset needRollbackCheckpoint to false only when we finish a ckpt
             // for rollback image
             if (needRollbackCheckpoint
-                && namesystem.getFSImage().hasRollbackFSImage()) {
+                && namesystemx.getFSImage().hasRollbackFSImage()) {
               namesystem.setCreatedRollbackImages(true);
               namesystem.setNeedRollbackFsImage(false);
             }

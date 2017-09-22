@@ -139,7 +139,7 @@ public class EditLogFileInputStream extends EditLogInputStream {
     Preconditions.checkState(state == State.UNINIT);
     BufferedInputStream bin = null;
     try {
-      fStream = log.getInputStream();//初始化远程文件读取流
+      fStream = log.getInputStream();//初始化远程文件读取流,log的实现类是URLLog
       bin = new BufferedInputStream(fStream);//将文件读取流封装到
       tracker = new FSEditLogLoader.PositionTrackingInputStream(bin);//对InputSteam进行了封装，记录读取的位置
       dataIn = new DataInputStream(tracker);

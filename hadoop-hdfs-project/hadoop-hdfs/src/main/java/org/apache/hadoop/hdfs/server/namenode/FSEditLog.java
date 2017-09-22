@@ -257,7 +257,8 @@ public class FSEditLog implements LogsPurgeable {
   }
 
   /**
-   * 初始化QuorumJournalManager,在FSNamesystem.startStandbyServices和FSImage.initEditLog中被调用
+   * 初始化QuorumJournalManager,在FSNamesystem.startStandbyServices和FSImage.initEditLog中被调用,
+   * 也就是说，只有处于standby状态的nameode在启动的时候，才会将segment文件的状态置为OPEN_FOR_READING
    */
   public synchronized void initSharedJournalsForRead() {
     if (state == State.OPEN_FOR_READING) {

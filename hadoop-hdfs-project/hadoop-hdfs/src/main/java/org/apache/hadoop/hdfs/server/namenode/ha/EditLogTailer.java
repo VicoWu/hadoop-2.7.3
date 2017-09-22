@@ -204,7 +204,7 @@ public class EditLogTailer {
     try {
       FSImage image = namesystem.getFSImage();
 
-      long lastTxnId = image.getLastAppliedTxId();//Standby NameNode当前已经有的最大的TxId
+      long lastTxnId = image.getLastAppliedTxId();//Standby NameNode当前已经有的最大的TxId，
       
       if (LOG.isDebugEnabled()) {
         LOG.debug("lastTxnId: " + lastTxnId);

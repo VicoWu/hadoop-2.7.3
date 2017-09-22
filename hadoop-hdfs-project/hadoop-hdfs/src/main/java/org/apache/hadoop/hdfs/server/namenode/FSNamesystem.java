@@ -1001,6 +1001,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
       // This will start a new log segment and write to the seen_txid file, so
       // we shouldn't do it when coming up in standby state
+
       if (!haEnabled || (haEnabled && startOpt == StartupOption.UPGRADE)
           || (haEnabled && startOpt == StartupOption.UPGRADEONLY)) {
         fsImage.openEditLogForWrite();//开始打开一个edit log文件，准备进行写操作

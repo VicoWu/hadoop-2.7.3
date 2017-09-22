@@ -850,7 +850,7 @@ public class FSImage implements Closeable {
         } finally {
           // Update lastAppliedTxId even in case of error, since some ops may
           // have been successfully applied before the error.
-          lastAppliedTxId = loader.getLastAppliedTxId();//从loader中获取当前已经load过来的最新的txId,更新到FSImage对象
+          lastAppliedTxId = loader.getLastAppliedTxId();//从loader中获取当前已经load过来的最新的txId,更新到FSImage对象，这样，下一轮请求editlog，起始位置就是它
         }
         // If we are in recovery mode, we may have skipped over some txids.
         if (editIn.getLastTxId() != HdfsConstants.INVALID_TXID) {
@@ -995,6 +995,7 @@ public class FSImage implements Closeable {
     
     FSImageFormatProtobuf.Saver saver = new FSImageFormatProtobuf.Saver(context);
     FSImageCompression compression = FSImageCompression.createCompression(conf);
+    //按照压缩配置，将img存入到以fsimage.ckpt开头的中间文件中
     saver.save(newFile, compression);
     
     MD5FileUtils.saveMD5File(dstFile, saver.getSavedDigest());
@@ -1040,7 +1041,7 @@ public class FSImage implements Closeable {
         NameNodeFile nnf) {
       this.context = context;
       this.sd = sd;
-      this.nnf = nnf;
+      this.nnf = nnf;//NameNodeFile.IMAGE
     }
 
     @Override
@@ -1105,10 +1106,10 @@ public class FSImage implements Closeable {
     boolean editLogWasOpen = editLog.isSegmentOpen();
     
     if (editLogWasOpen) {
-      editLog.endCurrentLogSegment(true);
+      editLog.endCurrentLogSegment(true);//关闭当前处于写状态的segment文件
     }
     long imageTxId = getLastAppliedOrWrittenTxId();
-    if (!addToCheckpointing(imageTxId)) {
+    if (!addToCheckpointing(imageTxId)) {//currentlyCheckpointing中已经保存了这个txid，说明这个txid截止的数据正在进行checkpoint操作
       throw new IOException(
           "FS image is being downloaded from another NN at txid " + imageTxId);
     }
@@ -1158,6 +1159,7 @@ public class FSImage implements Closeable {
       NameNodeFile nnf, long txid, Canceler canceler) throws IOException {
     StartupProgress prog = NameNode.getStartupProgress();
     prog.beginPhase(Phase.SAVING_CHECKPOINT);
+    //获取配置的img 目录
     if (storage.getNumStorageDirs(NameNodeDirType.IMAGE) == 0) {
       throw new IOException("No image directories available!");
     }
@@ -1170,9 +1172,9 @@ public class FSImage implements Closeable {
     try {
       List<Thread> saveThreads = new ArrayList<Thread>();
       // save images into current
-      for (Iterator<StorageDirectory> it
+      for (Iterator<StorageDirectory> it //对于每一个storage目录
              = storage.dirIterator(NameNodeDirType.IMAGE); it.hasNext();) {
-        StorageDirectory sd = it.next();
+        StorageDirectory sd = it.next();//
         FSImageSaver saver = new FSImageSaver(ctx, sd, nnf);
         Thread saveThread = new Thread(saver, saver.toString());
         saveThreads.add(saveThread);
@@ -1191,8 +1193,12 @@ public class FSImage implements Closeable {
         ctx.checkCancelled(); // throws
         assert false : "should have thrown above!";
       }
-  
+
+      //完成了img文件的存取，实际上是存为一个中间文件，以NameNodeFile.IMAGE_NEW开头。
+      //这时候就可以把这些中间文件rename称为最终正式文件了
+      ////最后一个参数false，代表不需要rename md5文件，这是因为在FSImageSaver中生成临时文件的时候已经生成了最终的md5文件
       renameCheckpoint(txid, NameNodeFile.IMAGE_NEW, nnf, false);
+
   
       // Since we now have a new checkpoint, we can clean up some
       // old edit logs and checkpoints.
@@ -1291,7 +1297,7 @@ public class FSImage implements Closeable {
       LOG.debug("renaming  " + fromFile.getAbsolutePath() 
                 + " to " + toFile.getAbsolutePath());
     }
-    if (!fromFile.renameTo(toFile)) {
+    if (!fromFile.renameTo(toFile)) {//rename失败
       if (!toFile.delete() || !fromFile.renameTo(toFile)) {
         throw new IOException("renaming  " + fromFile.getAbsolutePath() + " to "  + 
             toFile.getAbsolutePath() + " FAILED");

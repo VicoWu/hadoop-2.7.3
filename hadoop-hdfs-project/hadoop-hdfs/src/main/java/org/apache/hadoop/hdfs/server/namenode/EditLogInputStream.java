@@ -123,7 +123,7 @@ public abstract class EditLogInputStream implements Closeable {
    * 
    * @return an operation from the stream or null if at end of stream
    */
-  protected FSEditLogOp nextValidOp() {
+  protected FSEditLogOp nextValidOp() {//查看RedundantEditLogInputStream的重写
     // This is a trivial implementation which just assumes that any errors mean
     // that there is nothing more of value in the log.  Subclasses that support
     // error recovery will want to override this.

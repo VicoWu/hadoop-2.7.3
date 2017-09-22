@@ -410,6 +410,7 @@ public final class FSImageFormatProtobuf {
       FileOutputStream fout = new FileOutputStream(file);
       fileChannel = fout.getChannel();
       try {
+        //在2.7.2版本的hadoop上没有这几行日志
         LOG.info("Saving image file {} using {}", file, compression);
         long startTime = monotonicNow();
         saveInternal(fout, compression, file.getAbsolutePath());

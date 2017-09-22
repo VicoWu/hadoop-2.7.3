@@ -117,9 +117,10 @@ public abstract class Storage extends StorageInfo {
     public StorageDirType getStorageDirType();
     public boolean isOfType(StorageDirType type);
   }
-  
+  //在NNStorage初始化的时候，storageDirs被设置
   protected List<StorageDirectory> storageDirs = new ArrayList<StorageDirectory>();
-  
+
+
   private class DirIterator implements Iterator<StorageDirectory> {
     final StorageDirType dirType;
     final boolean includeShared;
