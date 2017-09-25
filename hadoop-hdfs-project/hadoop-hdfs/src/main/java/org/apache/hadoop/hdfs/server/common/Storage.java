@@ -117,7 +117,7 @@ public abstract class Storage extends StorageInfo {
     public StorageDirType getStorageDirType();
     public boolean isOfType(StorageDirType type);
   }
-  //在NNStorage初始化的时候，storageDirs被设置
+  //在NNStorage初始化的时候，storageDirs被设置，查看NNStorage.setStorageDirectories()方法
   protected List<StorageDirectory> storageDirs = new ArrayList<StorageDirectory>();
 
 

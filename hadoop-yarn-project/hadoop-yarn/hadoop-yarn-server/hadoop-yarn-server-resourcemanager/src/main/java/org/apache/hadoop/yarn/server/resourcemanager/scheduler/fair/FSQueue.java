@@ -172,7 +172,7 @@ public abstract class FSQueue implements Queue, Schedulable {
   }
 
   public void setSteadyFairShare(Resource steadyFairShare) {
-    this.steadyFairShare = steady;
+    this.steadyFairShare = steadyFairShare;
     metrics.setSteadyFairShare(steadyFairShare);
   }
 

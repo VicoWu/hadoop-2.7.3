@@ -1108,7 +1108,7 @@ public class FSImage implements Closeable {
     if (editLogWasOpen) {
       editLog.endCurrentLogSegment(true);//关闭当前处于写状态的segment文件
     }
-    long imageTxId = getLastAppliedOrWrittenTxId();
+    long imageTxId = getLastAppliedOrWrittenTxId();//本次checkpoint截止到的位置
     if (!addToCheckpointing(imageTxId)) {//currentlyCheckpointing中已经保存了这个txid，说明这个txid截止的数据正在进行checkpoint操作
       throw new IOException(
           "FS image is being downloaded from another NN at txid " + imageTxId);

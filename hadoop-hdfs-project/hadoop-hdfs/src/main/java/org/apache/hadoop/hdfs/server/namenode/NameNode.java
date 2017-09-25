@@ -617,7 +617,7 @@ public class NameNode implements NameNodeStatusMXBean {
   
   /**
    * Initialize name-node.
-   * 
+   * 如果是BackupNode， 则这个initialize方法被重写
    * @param conf the configuration
    */
   protected void initialize(Configuration conf) throws IOException {

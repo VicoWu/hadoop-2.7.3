@@ -188,7 +188,10 @@ class Checkpointer extends Daemon {
     NamenodeCommand cmd = 
       getRemoteNamenodeProxy().startCheckpoint(backupNode.getRegistration());
     CheckpointCommand cpCmd = null;
+    //关于这些返回值的含义，可以参考FSImage.startCheckpoint()方法
     switch(cmd.getAction()) {
+    //If backup storage contains image that is newer than or incompatible with 
+    // what the active name-node has, then the backup node should shutdown. wuchang
       case NamenodeProtocol.ACT_SHUTDOWN:
         shutdown();
         throw new IOException("Name-node " + backupNode.nnRpcAddress
@@ -209,7 +212,7 @@ class Checkpointer extends Daemon {
 
     long lastApplied = bnImage.getLastAppliedTxId();
     LOG.debug("Doing checkpoint. Last applied: " + lastApplied);
-    RemoteEditLogManifest manifest =
+    RemoteEditLogManifest manifest = //从NameNode处获取edit log的文件清单列表
       getRemoteNamenodeProxy().getEditLogManifest(bnImage.getLastAppliedTxId() + 1);
 
     boolean needReloadImage = false;
@@ -234,7 +237,7 @@ class Checkpointer extends Daemon {
       }
   
       // get edits files
-      for (RemoteEditLog log : manifest.getLogs()) {
+      for (RemoteEditLog log : manifest.getLogs()) {//依次下载这些edit log文件
         TransferFsImage.downloadEditsToStorage(
             backupNode.nnHttpAddress, log, bnStorage);
       }

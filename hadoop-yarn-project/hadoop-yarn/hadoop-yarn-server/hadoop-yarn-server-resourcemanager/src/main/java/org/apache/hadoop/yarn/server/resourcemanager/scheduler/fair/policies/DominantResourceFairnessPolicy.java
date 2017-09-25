@@ -40,7 +40,7 @@ import static org.apache.hadoop.yarn.server.resourcemanager.resource.ResourceTyp
  */
 @Private
 @Unstable
-public class . extends SchedulingPolicy {
+public class DominantResourceFairnessPolicy extends SchedulingPolicy {
 
   public static final String NAME = "DRF";
 

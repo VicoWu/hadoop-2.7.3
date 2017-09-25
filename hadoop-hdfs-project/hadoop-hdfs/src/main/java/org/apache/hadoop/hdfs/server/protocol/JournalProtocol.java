@@ -26,6 +26,8 @@ import org.apache.hadoop.security.KerberosInfo;
 /**
  * Protocol used to journal edits to a remote node. Currently,
  * this is used to publish edits from the NameNode to a BackupNode.
+ * 这个协议用来供NameNode和BackupNode之间通信，负责将editlog推送给BackupNode
+ * 
  */
 @KerberosInfo(
     serverPrincipal = DFSConfigKeys.DFS_NAMENODE_KERBEROS_PRINCIPAL_KEY,

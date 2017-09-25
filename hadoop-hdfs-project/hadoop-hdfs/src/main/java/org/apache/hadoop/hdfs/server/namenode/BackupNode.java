@@ -365,6 +365,9 @@ public class BackupNode extends NameNode {
     NamenodeRegistration nnReg = null;
     while(!isStopRequested()) {
       try {
+    	//通过getRegistration()获取请求体，发送给Active NameNode。由于请求体中携带了角色信息，
+    	  //远程的Active NameNode会根据角色判断是否加入到自己的output stream中。通过registerBackupNode.registerBackupNode()
+    	 //可以看到，只有backup的角色会被添加到输出流中去
         nnReg = namenode.registerSubordinateNamenode(getRegistration());
         break;
       } catch(SocketTimeoutException e) {  // name-node is busy

@@ -164,8 +164,8 @@ public class StandbyCheckpointer {
       
       FSImage img = namesystem.getFSImage();
       
-      long prevCheckpointTxId = img.getStorage().getMostRecentCheckpointTxId();
-      long thisCheckpointTxId = img.getLastAppliedOrWrittenTxId();
+      long prevCheckpointTxId = img.getStorage().getMostRecentCheckpointTxId();//上一次checkpoint完成的位置
+      long thisCheckpointTxId = img.getLastAppliedOrWrittenTxId();//当前最后一次操作的位置，即本次checkpoint需要到达的位置
       assert thisCheckpointTxId >= prevCheckpointTxId;
       if (thisCheckpointTxId == prevCheckpointTxId) {
         LOG.info("A checkpoint was triggered but the Standby Node has not " +
@@ -182,7 +182,7 @@ public class StandbyCheckpointer {
       } else {
         imageType = NameNodeFile.IMAGE;
       }
-      img.saveNamespace(namesystem, imageType, canceler);
+      img.saveNamespace(namesystem, imageType, canceler);//进行checkpoint操作
       txid = img.getStorage().getMostRecentCheckpointTxId();
       assert txid == thisCheckpointTxId : "expected to save checkpoint at txid=" +
         thisCheckpointTxId + " but instead saved at txid=" + txid;
