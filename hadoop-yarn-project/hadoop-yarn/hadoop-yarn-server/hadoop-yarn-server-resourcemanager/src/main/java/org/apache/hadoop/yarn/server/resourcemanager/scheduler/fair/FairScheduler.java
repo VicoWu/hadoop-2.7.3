@@ -1109,7 +1109,7 @@ public class FairScheduler extends
     // 2. Schedule if there are no reservations
 
     FSAppAttempt reservedAppSchedulable = node.getReservedAppSchedulable();
-    if (reservedAppSchedulable != null) {
+    if (reservedAppSchedulable != null) { //如果这个节点上已经有reservation
       Priority reservedPriority = node.getReservedContainer().getReservedPriority();
       FSQueue queue = reservedAppSchedulable.getQueue();
 
@@ -1124,18 +1124,18 @@ public class FairScheduler extends
         reservedAppSchedulable = null;
       } else {
         // Reservation exists; try to fulfill the reservation
-        if (LOG.isDebugEnabled()) {
+        if (LOG.isDebugEnabled()) { //reservation已经存在，那么尝试完成这次reservation
           LOG.debug("Trying to fulfill reservation for application "
               + reservedAppSchedulable.getApplicationAttemptId()
               + " on node: " + node);
         }
-        node.getReservedAppSchedulable().assignReservedContainer(node);
+        node.getReservedAppSchedulable().assignReservedContainer(node);//对这个已经进行了reservation对节点进行节点分配
       }
     }
-    if (reservedAppSchedulable == null) {
+    if (reservedAppSchedulable == null) {//这个节点还没有进行reservation
       // No reservation, schedule at queue which is farthest below fair share
       int assignedContainers = 0;
-      while (node.getReservedContainer() == null) {
+      while (node.getReservedContainer() == null) { //如果这个节点没有进行reservation，那么，就尝试
         boolean assignedContainer = false;
         if (!queueMgr.getRootQueue().assignContainer(node).equals(
             Resources.none())) {

@@ -1184,7 +1184,7 @@ public class FSImage implements Closeable {
       saveThreads.clear();
       storage.reportErrorsOnDirectories(ctx.getErrorSDs());
   
-      if (storage.(NameNodeDirType.IMAGE) == 0) {
+      if (storage.getNumStorageDirs(NameNodeDirType.IMAGE) == 0) {
         throw new IOException(
           "Failed to save in any storage directories while saving namespace.");
       }

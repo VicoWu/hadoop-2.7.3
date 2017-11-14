@@ -255,8 +255,8 @@ public class BackupImage extends FSImage {
     }
     assert bnState == BNState.IN_SYNC;
   }
-  bnImage.convergeJournalSpool();
-  private boolean tryConvergeJournalSpool() throws IOException {
+
+   private boolean tryConvergeJournalSpool() throws IOException {
     Preconditions.checkState(bnState == BNState.JOURNAL_ONLY,
         "bad state: %s", bnState);
     
