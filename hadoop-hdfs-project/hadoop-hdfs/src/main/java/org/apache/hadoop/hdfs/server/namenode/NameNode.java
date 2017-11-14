@@ -809,7 +809,7 @@ public class NameNode implements NameNodeStatusMXBean {
     this.haContext = createHAContext();
     try {
       initializeGenericKeys(conf, nsId, namenodeId);
-      initialize(conf);
+      initialize(conf);//如果是子类BackupNode，则调用到是BackupNode.initilize()
       try {
         haContext.writeLock();
         state.prepareToEnterState(haContext);

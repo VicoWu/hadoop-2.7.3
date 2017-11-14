@@ -65,6 +65,7 @@ public class BackupImage extends FSImage {
     /**
      * Edits from the NN should be written to the local edits log
      * but not applied to the namespace.
+     * 处于该状态，只能将edit log写到文件，不可以在内存中应用
      */
     JOURNAL_ONLY,
     /**
@@ -149,7 +150,7 @@ public class BackupImage extends FSImage {
 
   /**
    * Receive a batch of edits from the NameNode.
-   * 
+   * 在BackupNodeRpcServer.journal（）中被调用
    * Depending on bnState, different actions are taken. See
    * {@link BackupImage.BNState}
    * 
@@ -169,15 +170,15 @@ public class BackupImage extends FSImage {
     
     switch(bnState) {
       case DROP_UNTIL_NEXT_ROLL:
-        return;
+        return;//什么都不做，既不用apply到内存，也不写入到本地
 
-      case IN_SYNC:
+      case IN_SYNC://处于IN_SYNC状态，则将这些消息应用到内存
         // update NameSpace in memory
         applyEdits(firstTxId, numTxns, data);
         break;
       
-      case JOURNAL_ONLY:
-        break;
+      case JOURNAL_ONLY://处于JOURNAL_ONLY,则这一批来自rpc的消息不可以load到内存的namespace，只能够追加到磁盘的edit文件
+        break;//需要把收到的edit log写入到本地
       
       default:
         throw new AssertionError("Unhandled state: " + bnState);
@@ -202,6 +203,7 @@ public class BackupImage extends FSImage {
 
   /**
    * Apply the batch of edits to the local namespace.
+   *
    */
   private synchronized void applyEdits(long firstTxId, int numTxns, byte[] data)
       throws IOException {
@@ -241,6 +243,8 @@ public class BackupImage extends FSImage {
    * Transition the BackupNode from JOURNAL_ONLY state to IN_SYNC state.
    * This is done by repeated invocations of tryConvergeJournalSpool until
    * we are caught up to the latest in-progress edits file.
+   * 在namenodeStartedLogSegment()方法中，关闭了旧的segement，打开了新的segment，此时会进入
+   * JOURNAL_ONLY状态，即禁止进行apply edit操作，只能进行journal
    */
   void convergeJournalSpool() throws IOException {
     Preconditions.checkState(bnState == BNState.JOURNAL_ONLY,
@@ -251,7 +255,7 @@ public class BackupImage extends FSImage {
     }
     assert bnState == BNState.IN_SYNC;
   }
-  
+  bnImage.convergeJournalSpool();
   private boolean tryConvergeJournalSpool() throws IOException {
     Preconditions.checkState(bnState == BNState.JOURNAL_ONLY,
         "bad state: %s", bnState);
@@ -260,7 +264,8 @@ public class BackupImage extends FSImage {
     // ahead of where we're reading, concurrently. Since the state
     // is JOURNAL_ONLY at this point, we know that lastAppliedTxId
     // doesn't change, and curSegmentTxId only increases
-
+    //最后一次apply的txid和当前最近的segment的txId-1存在差距，说明中间肯定还存在一些segment没有load进来，需要先load进来，然后再吧当前的
+    //处于打开状态的editlog中的transaction load进来
     while (lastAppliedTxId < editLog.getCurSegmentTxId() - 1) {
       long target = editLog.getCurSegmentTxId();
       LOG.info("Loading edits into backupnode to try to catch up from txid "
@@ -272,15 +277,16 @@ public class BackupImage extends FSImage {
 
       editLog.recoverUnclosedStreams();
       Iterable<EditLogInputStream> editStreamsAll 
-        = editLog.selectInputStreams(lastAppliedTxId, target - 1);
+        = editLog.selectInputStreams(lastAppliedTxId, target - 1);//允许读取处于in-progress状态的edit log
       // remove inprogress
       List<EditLogInputStream> editStreams = Lists.newArrayList();
       for (EditLogInputStream s : editStreamsAll) {
+        //如果当前的这个steam的第一个txid与editlog的当前txid不同，则加进来（说明这个segment肯定处于关闭状态）
         if (s.getFirstTxId() != editLog.getCurSegmentTxId()) {
           editStreams.add(s);
         }
       }
-      loadEdits(editStreams, getNamesystem());
+      loadEdits(editStreams, getNamesystem());//读取流中的操作，在内存中进行重演
     }
     
     // now, need to load the in-progress file
@@ -295,10 +301,11 @@ public class BackupImage extends FSImage {
         = getEditLog().selectInputStreams(
             getEditLog().getCurSegmentTxId(),
             getEditLog().getCurSegmentTxId());
-      
+
+
       for (EditLogInputStream s : editStreams) {
         if (s.getFirstTxId() == getEditLog().getCurSegmentTxId()) {
-          stream = s;
+          stream = s;//如果这个stream的第一个txid与当前的editlog的第一个txid相同，则找到了所谓的处于打开状态的edit log
         }
         break;
       }
@@ -309,6 +316,7 @@ public class BackupImage extends FSImage {
       }
 
       try {
+        //获取位移 的差值
         long remainingTxns = getEditLog().getLastWrittenTxId() - lastAppliedTxId;
         
         LOG.info("Going to finish converging with remaining " + remainingTxns
@@ -316,8 +324,8 @@ public class BackupImage extends FSImage {
         
         FSEditLogLoader loader =
             new FSEditLogLoader(getNamesystem(), lastAppliedTxId);
-        loader.loadFSEdits(stream, lastAppliedTxId + 1);
-        lastAppliedTxId = loader.getLastAppliedTxId();
+        loader.loadFSEdits(stream, lastAppliedTxId + 1);//从lastAppliedTxId + 1的位置开始进行load
+        lastAppliedTxId = loader.getLastAppliedTxId();//最后load到的txid
         assert lastAppliedTxId == getEditLog().getLastWrittenTxId();
       } finally {
         FSEditLog.closeAllStreams(editStreams);
@@ -325,7 +333,7 @@ public class BackupImage extends FSImage {
 
       LOG.info("Successfully synced BackupNode with NameNode at txnid " +
           lastAppliedTxId);
-      setState(BNState.IN_SYNC);
+      setState(BNState.IN_SYNC);//设置状态为同步完成状态，此时此刻，内存中的txid要早于硬盘中的txid，在IN_SYNC状态下，NameNode通过RPC发过来的请求可以apply了
     }
     return true;
   }
@@ -344,6 +352,8 @@ public class BackupImage extends FSImage {
    * Receive a notification that the NameNode has begun a new edit log.
    * This causes the BN to also start the new edit log in its local
    * directories.
+   * 在NamenodeRpcserver.startLogSegment()的rpc中被调用
+   * 收到了namenode开始了一个新的segment的消息，此时Backup node也需要在本地开始一个新的edit log文件
    */
   synchronized void namenodeStartedLogSegment(long txid)
       throws IOException {
@@ -366,18 +376,18 @@ public class BackupImage extends FSImage {
       }
     }
     editLog.setNextTxId(txid);
-    editLog.startLogSegment(txid, false);
+    editLog.startLogSegment(txid, false);//本地开启一个新的segment文件
     if (bnState == BNState.DROP_UNTIL_NEXT_ROLL) {
-      setState(BNState.JOURNAL_ONLY);
+      setState(BNState.JOURNAL_ONLY);//只写入到本地
     }
     
     if (stopApplyingEditsOnNextRoll) {
       if (bnState == BNState.IN_SYNC) {
-        LOG.info("Stopped applying edits to prepare for checkpoint.");
+        LOG.info("Stopped applying edits to prepare for checkpoint.");//禁止进行edit  log的apply，开始尽心gcheckpoint操作了
         setState(BNState.JOURNAL_ONLY);
       }
-      stopApplyingEditsOnNextRoll = false;
-      notifyAll();
+      stopApplyingEditsOnNextRoll = false;//可以进行applyEdits操作了
+      notifyAll();//所有在当前image对象上等待的线程可以结束等待了
     }
   }
 
@@ -391,26 +401,29 @@ public class BackupImage extends FSImage {
   }
 
   /**
+   *
    * After {@link #freezeNamespaceAtNextRoll()} has been called, wait until
    * the BN receives notification of the next log roll.
+   * 必须等到IN_SYNC状态结束
    */
   synchronized void waitUntilNamespaceFrozen() throws IOException {
-    if (bnState != BNState.IN_SYNC) return;
+    if (bnState != BNState.IN_SYNC) return;//如果处于IN_SYNC，说明RPC端正在写入，因此需要等待
 
     LOG.info("Waiting until the NameNode rolls its edit logs in order " +
-        "to freeze the BackupNode namespace.");
-    while (bnState == BNState.IN_SYNC) {
+        "to freeze the BackupNode namespace.");//如果处于IN_SYNC，说明RPC端正在写入，因此需要等待
+    while (bnState == BNState.IN_SYNC) {//只要处于IN_SYNC，则继续等待
       Preconditions.checkState(stopApplyingEditsOnNextRoll,
         "If still in sync, we should still have the flag set to " +
         "freeze at next roll");
       try {
-        wait();
+        wait();//等待image.wakeup被调用
       } catch (InterruptedException ie) {
         LOG.warn("Interrupted waiting for namespace to freeze", ie);
         throw new IOException(ie);
       }
     }
-    LOG.info("BackupNode namespace frozen.");
+    //等待结束，说明RPC调用此时已经无法写入到内存，此时Checkpointer可以进行load了
+    LOG.info("BackupNode namespace frozen.");//成功地锁定了namespace，Checkpointer可以进行checkpoint操作了
   }
 
   /**

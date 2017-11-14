@@ -1184,7 +1184,7 @@ public class FSImage implements Closeable {
       saveThreads.clear();
       storage.reportErrorsOnDirectories(ctx.getErrorSDs());
   
-      if (storage.getNumStorageDirs(NameNodeDirType.IMAGE) == 0) {
+      if (storage.(NameNodeDirType.IMAGE) == 0) {
         throw new IOException(
           "Failed to save in any storage directories while saving namespace.");
       }
@@ -1339,13 +1339,14 @@ public class FSImage implements Closeable {
     LOG.info("Start checkpoint at txid " + getEditLog().getLastWrittenTxId());
     String msg = null;
     // Verify that checkpoint is allowed
-    if(bnReg.getNamespaceID() != storage.getNamespaceID())
+    if(bnReg.getNamespaceID() != storage.getNamespaceID())//namespace不一致，说明不是一个hdfs系统
       msg = "Name node " + bnReg.getAddress()
             + " has incompatible namespace id: " + bnReg.getNamespaceID()
             + " expected: " + storage.getNamespaceID();
-    else if(bnReg.isRole(NamenodeRole.NAMENODE))
+    else if(bnReg.isRole(NamenodeRole.NAMENODE))//不允许角色为namenode的节点进行backup操作
       msg = "Name node " + bnReg.getAddress()
             + " role " + bnReg.getRole() + ": checkpoint is not allowed.";
+      //如果storage layout version不同，或者storage version相同，但是它的cTime更大，则报错
     else if(bnReg.getLayoutVersion() < storage.getLayoutVersion()
         || (bnReg.getLayoutVersion() == storage.getLayoutVersion()
             && bnReg.getCTime() > storage.getCTime()))
@@ -1359,11 +1360,11 @@ public class FSImage implements Closeable {
       LOG.error(msg);
       return new NamenodeCommand(NamenodeProtocol.ACT_SHUTDOWN);
     }
-    boolean needToReturnImg = true;
+    boolean needToReturnImg = true;//默认需要远程的Backup Node或者Checkpoint Node返回
     if(storage.getNumStorageDirs(NameNodeDirType.IMAGE) == 0)
       // do not return image if there are no image directories
       needToReturnImg = false;
-    CheckpointSignature sig = rollEditLog();
+    CheckpointSignature sig = rollEditLog();//关闭目前的edit log文件，开始一个新的edit log
     return new CheckpointCommand(sig, needToReturnImg);
   }
 

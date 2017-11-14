@@ -317,6 +317,7 @@ public class JournalSet implements JournalManager {
       }
       try {
     	//这里的manager既包括了本地的FileJournalManager,也包括了远程的QuorumJournalManager
+        //如果是Backup Node或者Checkpoint Node，由于只能运行在non-ha模式下，不可以配置qjm,因此实际上是本地文件
         jas.getManager().selectInputStreams(allStreams, fromTxId, inProgressOk);
       } catch (IOException ioe) {
         LOG.warn("Unable to determine input streams from " + jas.getManager() +

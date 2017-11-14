@@ -657,6 +657,7 @@ public class FSEditLog implements LogsPurgeable {
             if (journalSet.isEmpty()) {
               throw new IOException("No journals available to flush");
             }
+
             editLogStream.setReadyToFlush();
           } catch (IOException e) {
             final String msg =

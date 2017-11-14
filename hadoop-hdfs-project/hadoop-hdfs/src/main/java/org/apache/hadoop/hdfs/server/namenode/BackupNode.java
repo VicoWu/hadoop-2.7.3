@@ -145,6 +145,7 @@ public class BackupNode extends NameNode {
     // but should be turned back on if it ever becomes active.
     conf.setLong(CommonConfigurationKeys.FS_TRASH_INTERVAL_KEY, 
                  CommonConfigurationKeys.FS_TRASH_INTERVAL_DEFAULT);
+    //获取了远程的Active Namenode的namespace信息
     NamespaceInfo nsInfo = handshake(conf);
     super.initialize(conf);
     namesystem.setBlockPoolId(nsInfo.getBlockPoolID());
@@ -313,7 +314,7 @@ public class BackupNode extends NameNode {
     NamespaceInfo nsInfo = null;
     while(!isStopRequested()) {
       try {
-        nsInfo = handshake(namenode);
+        nsInfo = handshake(namenode);//获取了服务端的namespace information
         break;
       } catch(SocketTimeoutException e) {  // name-node is busy
         LOG.info("Problem connecting to server: " + nnAddress);
@@ -353,6 +354,7 @@ public class BackupNode extends NameNode {
     BackupImage bnImage = (BackupImage)getFSImage();
     NNStorage storage = bnImage.getStorage();
     // verify namespaceID
+    //namespaceid = 0代表这个namespace刚刚初始化，因此需要用远程的namenode的storage信息来设置自己的storage信息
     if (storage.getNamespaceID() == 0) { // new backup storage
       storage.setStorageInfo(nsInfo);
       storage.setBlockPoolID(nsInfo.getBlockPoolID());
@@ -366,8 +368,8 @@ public class BackupNode extends NameNode {
     while(!isStopRequested()) {
       try {
     	//通过getRegistration()获取请求体，发送给Active NameNode。由于请求体中携带了角色信息，
-    	  //远程的Active NameNode会根据角色判断是否加入到自己的output stream中。通过registerBackupNode.registerBackupNode()
-    	 //可以看到，只有backup的角色会被添加到输出流中去
+    	//远程的Active NameNode会根据角色判断是否加入到自己的output stream中。通过registerBackupNode.registerBackupNode()
+        //可以看到，只有backup的角色会被添加到输出流中去
         nnReg = namenode.registerSubordinateNamenode(getRegistration());
         break;
       } catch(SocketTimeoutException e) {  // name-node is busy
@@ -398,7 +400,8 @@ public class BackupNode extends NameNode {
   private static NamespaceInfo handshake(NamenodeProtocol namenode)
   throws IOException, SocketTimeoutException {
     NamespaceInfo nsInfo;
-    nsInfo = namenode.versionRequest();  // throws SocketTimeoutException 
+    //关于服务端调用，查看NamenodeRPCServer.versionRequest()
+    nsInfo = namenode.versionRequest();  // throws SocketTimeoutException
     String errorMsg = null;
     // verify build version
     if( ! nsInfo.getBuildVersion().equals( Storage.getBuildVersion())) {

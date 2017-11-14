@@ -762,7 +762,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       if (!haEnabled && HAUtil.usesSharedEditsDir(conf)) {
         LOG.warn("Configured NNs:\n" + DFSUtil.nnAddressesAsString(conf));
         throw new IOException("Invalid configuration: a shared edits dir " +
-            "must not be specified if HA is not enabled.");
+            "must not be specified if HA is not enabled.");//在non-ha模式下，不可以配置shared-dir
       }
 
       // Get the checksum type from config
@@ -5874,7 +5874,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       LOG.info("Start checkpoint for " + backupNode.getAddress());
       NamenodeCommand cmd = getFSImage().startCheckpoint(backupNode,
           activeNamenode);
-      getEditLog().logSync();
+      getEditLog().logSync();//缓存交换，将缓存中的数据进行flush操作
       return cmd;
     } finally {
       writeUnlock();

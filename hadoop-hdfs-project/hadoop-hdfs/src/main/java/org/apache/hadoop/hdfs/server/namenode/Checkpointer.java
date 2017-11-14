@@ -184,7 +184,8 @@ class Checkpointer extends Daemon {
 
     long startTime = monotonicNow();
     bnImage.freezeNamespaceAtNextRoll();
-    
+    //服务端调用，查看NameNodeRpcServer.startCheckpoint()，服务端会结束掉正在写的sgement文件，开启一个新的segment文件
+    //客户端调用，查看
     NamenodeCommand cmd = 
       getRemoteNamenodeProxy().startCheckpoint(backupNode.getRegistration());
     CheckpointCommand cpCmd = null;
@@ -192,7 +193,7 @@ class Checkpointer extends Daemon {
     switch(cmd.getAction()) {
     //If backup storage contains image that is newer than or incompatible with 
     // what the active name-node has, then the backup node should shutdown. wuchang
-      case NamenodeProtocol.ACT_SHUTDOWN:
+      case NamenodeProtocol.ACT_SHUTDOWN://如果发现backup node的image比namenode的更新，或者storage的版本不一致，肯定更有问题，这时候backup node需要关闭
         shutdown();
         throw new IOException("Name-node " + backupNode.nnRpcAddress
                                            + " requested shutdown.");
@@ -203,8 +204,11 @@ class Checkpointer extends Daemon {
         throw new IOException("Unsupported NamenodeCommand: "+cmd.getAction());
     }
 
+    //BackupImage.namenodeStartedLogSegment()如果正在发生，那么如果处于frozen，则必须等待
     bnImage.waitUntilNamespaceFrozen();
-    
+
+    //在进行checkpoint期间，来自rpc的edit只能写入文件，不可以应用到内存
+    //查看服务端调用 NameNodeRPCServer.startCheckpoint()
     CheckpointSignature sig = cpCmd.getSignature();
 
     // Make sure we're talking to the same NN!
@@ -217,22 +221,24 @@ class Checkpointer extends Daemon {
 
     boolean needReloadImage = false;
     if (!manifest.getLogs().isEmpty()) {
-      RemoteEditLog firstRemoteLog = manifest.getLogs().get(0);
+      RemoteEditLog firstRemoteLog = manifest.getLogs().get(0);//获取第一个远程的edit log文件
       // we don't have enough logs to roll forward using only logs. Need
       // to download and load the image.
+      //如果从远程获取的edit log文件的transaction 与自己目前最后一次已经获取的log文件的transaction存在gap，需要进行reload
       if (firstRemoteLog.getStartTxId() > lastApplied + 1) {
+        //sig.mostRecentCheckpointTxId存放了Active NameNode在最后一个checkpoint的位点
         LOG.info("Unable to roll forward using only logs. Downloading " +
             "image with txid " + sig.mostRecentCheckpointTxId);
         MD5Hash downloadedHash = TransferFsImage.downloadImageToStorage(
             backupNode.nnHttpAddress, sig.mostRecentCheckpointTxId, bnStorage,
-            true);
+            true);//从远程获取这个位点的image文件
         bnImage.saveDigestAndRenameCheckpointImage(NameNodeFile.IMAGE,
             sig.mostRecentCheckpointTxId, downloadedHash);
-        lastApplied = sig.mostRecentCheckpointTxId;
+        lastApplied = sig.mostRecentCheckpointTxId;//更新lastApplied id
         needReloadImage = true;
       }
 
-      if (firstRemoteLog.getStartTxId() > lastApplied + 1) {
+      if (firstRemoteLog.getStartTxId() > lastApplied + 1) {//在下载了最新的image文件以后，依然存在gap，则抛出异常
         throw new IOException("No logs to roll forward from " + lastApplied);
       }
   
@@ -242,13 +248,14 @@ class Checkpointer extends Daemon {
             backupNode.nnHttpAddress, log, bnStorage);
       }
 
+      //刚才已经下载了新的image文件，因此需要将这个image文件reload到内存
       if(needReloadImage) {
         LOG.info("Loading image with txid " + sig.mostRecentCheckpointTxId);
         File file = bnStorage.findImageFile(NameNodeFile.IMAGE,
             sig.mostRecentCheckpointTxId);
         bnImage.reloadFromImageFile(file, backupNode.getNamesystem());
       }
-      rollForwardByApplyingLogs(manifest, bnImage, backupNode.getNamesystem());
+      rollForwardByApplyingLogs(manifest, bnImage, backupNode.getNamesystem());//将edit log应用到内存
     }
     
     long txid = bnImage.getLastAppliedTxId();
@@ -259,21 +266,25 @@ class Checkpointer extends Daemon {
       if(backupNode.namesystem.getBlocksTotal() > 0) {
         backupNode.namesystem.setBlockTotal();
       }
-      bnImage.saveFSImageInAllDirs(backupNode.getNamesystem(), txid);
+      bnImage.saveFSImageInAllDirs(backupNode.getNamesystem(), txid);//将当前内存镜像dump到fsimage文件，产生最新的fsimage文件
       bnStorage.writeAll();
     } finally {
       backupNode.namesystem.writeUnlock();
     }
 
+    //将image文件上传给active namenode
     if(cpCmd.needToReturnImage()) {
       TransferFsImage.uploadImageFromStorage(backupNode.nnHttpAddress, conf,
           bnStorage, NameNodeFile.IMAGE, txid);
     }
 
-    getRemoteNamenodeProxy().endCheckpoint(backupNode.getRegistration(), sig);
+    getRemoteNamenodeProxy().endCheckpoint(backupNode.getRegistration(), sig);//结束checkpoint过程
 
+    //只有backup 节点需要进行converge操作，追赶txid到最新的状态
+    //如果是checkpoint node，没有这种实时性需求，只需要依靠fsimage文件和edit log文件拷贝就可以完成
+    //如果是BACKUP,则存在处于in-progress状态的edit log文件，此时需要把这个处于打开状态的文件里面的edit load到内存
     if (backupNode.getRole() == NamenodeRole.BACKUP) {
-      bnImage.convergeJournalSpool();
+      bnImage.convergeJournalSpool(); //调用完毕以后，状态成为IN_SYNC，
     }
     backupNode.setRegistration(); // keep registration up to date
     
@@ -294,6 +305,13 @@ class Checkpointer extends Daemon {
     }
   }
 
+  /**
+   * 向前推进txid
+   * @param manifest
+   * @param dstImage
+   * @param dstNamesystem
+   * @throws IOException
+   */
   static void rollForwardByApplyingLogs(
       RemoteEditLogManifest manifest,
       FSImage dstImage,
@@ -304,13 +322,13 @@ class Checkpointer extends Daemon {
     for (RemoteEditLog log : manifest.getLogs()) {
       if (log.getEndTxId() > dstImage.getLastAppliedTxId()) {
         File f = dstStorage.findFinalizedEditsFile(
-            log.getStartTxId(), log.getEndTxId());
+            log.getStartTxId(), log.getEndTxId());//找到本地的符合这个startTxId和endTxId的editlog文件
         editsStreams.add(new EditLogFileInputStream(f, log.getStartTxId(), 
                                                     log.getEndTxId(), true));
       }
     }
     LOG.info("Checkpointer about to load edits from " +
         editsStreams.size() + " stream(s).");
-    dstImage.loadEdits(editsStreams, dstNamesystem);
+    dstImage.loadEdits(editsStreams, dstNamesystem);//将这些edit log文件加载到内存
   }
 }

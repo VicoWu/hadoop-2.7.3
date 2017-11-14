@@ -40,7 +40,7 @@ import com.google.protobuf.ServiceException;
 @InterfaceAudience.Private
 public class JournalProtocolServerSideTranslatorPB implements JournalProtocolPB {
   /** Server side implementation to delegate the requests to */
-  private final JournalProtocol impl;
+  private final JournalProtocol impl;//这里的impl是BackupNodeRpcServer，查看BackupNodeRpcServer
 
   private final static JournalResponseProto VOID_JOURNAL_RESPONSE = 
   JournalResponseProto.newBuilder().build();
@@ -54,6 +54,13 @@ public class JournalProtocolServerSideTranslatorPB implements JournalProtocolPB 
   }
 
   /** @see JournalProtocol#journal */
+  /**
+   * 具体的客户端调用，可以查看EditLogBackupOutputStream.flushAndSync() -> JournalProtocolTranslatorPB.journal()
+   * @param unused
+   * @param req
+   * @return
+   * @throws ServiceException
+   */
   @Override
   public JournalResponseProto journal(RpcController unused,
       JournalRequestProto req) throws ServiceException {
