@@ -162,6 +162,11 @@ public class FSParentQueue extends FSQueue {
     return userAcls;
   }
 
+  /**
+   * 查看FairScheduler.attemptScheduling对这个方法的调用
+   * @param node
+   * @return
+   */
   @Override
   public Resource assignContainer(FSSchedulerNode node) {
     Resource assigned = Resources.none();
@@ -173,7 +178,7 @@ public class FSParentQueue extends FSQueue {
 
     Collections.sort(childQueues, policy.getComparator());
     for (FSQueue child : childQueues) {
-      assigned = child.assignContainer(node);
+      assigned = child.assignContainer(node); //childQueus有可能是FSParentQueue或者FSLeafQueue
       if (!Resources.equals(assigned, Resources.none())) {
         break;
       }

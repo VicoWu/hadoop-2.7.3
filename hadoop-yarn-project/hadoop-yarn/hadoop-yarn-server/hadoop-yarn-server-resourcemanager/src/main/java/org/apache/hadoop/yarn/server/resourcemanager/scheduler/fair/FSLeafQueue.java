@@ -299,6 +299,11 @@ public class FSLeafQueue extends FSQueue {
     demand = Resources.componentwiseMin(demand, maxRes);
   }
 
+  /**
+   * 尽量将自己的app分配到某个节点上，FSLeafQueue会遍历自己目前所有的runnableApps，然后逐个尝试进行分配，只要有一个分配成功就退出
+   * @param node 等待进行container分配的节点
+   * @return
+   */
   @Override
   public Resource assignContainer(FSSchedulerNode node) {
     Resource assigned = Resources.none();
@@ -323,13 +328,13 @@ public class FSLeafQueue extends FSQueue {
     // but we can accept it in practice since the probability is low.
     readLock.lock();
     try {
-      for (FSAppAttempt sched : runnableApps) {
+      for (FSAppAttempt sched : runnableApps) { //会遍历所有的可以运行的Application，对他们进行资源分配尝试
         if (SchedulerAppUtils.isBlacklisted(sched, node, LOG)) {
           continue;
         }
 
-        assigned = sched.assignContainer(node);
-        if (!assigned.equals(Resources.none())) {
+        assigned = sched.assignContainer(node); //这里的sched应该是FSAppAttempt
+        if (!assigned.equals(Resources.none())) { //如果发现进行了资源分配，即，不管是进行了预留，还是进行了实际的分配，都跳出循环
           break;
         }
       }

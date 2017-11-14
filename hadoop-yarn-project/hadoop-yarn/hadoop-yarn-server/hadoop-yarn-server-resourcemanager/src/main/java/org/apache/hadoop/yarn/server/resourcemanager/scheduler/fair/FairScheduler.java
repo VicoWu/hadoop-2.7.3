@@ -1138,8 +1138,8 @@ public class FairScheduler extends
       while (node.getReservedContainer() == null) { //如果这个节点没有进行reservation，那么，就尝试
         boolean assignedContainer = false;
         if (!queueMgr.getRootQueue().assignContainer(node).equals(
-            Resources.none())) {
-          assignedContainers++;
+            Resources.none())) { //尝试进行container的分配，并判断是否完全没有分配到并且也没有reserve成功
+          assignedContainers++; //如果分配到了资源，或者预留到了资源，总之不是none
           assignedContainer = true;
         }
         if (!assignedContainer) { break; }
