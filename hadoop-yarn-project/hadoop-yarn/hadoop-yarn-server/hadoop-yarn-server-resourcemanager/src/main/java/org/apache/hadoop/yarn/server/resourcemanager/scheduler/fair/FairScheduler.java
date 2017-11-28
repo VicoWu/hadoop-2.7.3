@@ -919,6 +919,9 @@ public class FairScheduler extends
   /**
    * 这个方法会在ApplicationMasterService中调用
    * 当ApplicationMaster向AMS发起资源请求，AMS则会调用具体的Scheduler来进行资源的分配
+   * 注意把allocate的过程和assign的过程相区别
+   * allocate是 AM和RM之间关于资源申请和释放的交互，假如有一些请求，会保存在每一个FSAppAttempt中
+   * assign是RM对请求进行资源分派的过程，即根据每一个节点的资源剩余、队列的资源剩余等情况，将资源分派给对应请求的过程
    */
   @Override
   public Allocation allocate(ApplicationAttemptId appAttemptId,
@@ -994,6 +997,7 @@ public class FairScheduler extends
   
   /**
    * Process a heartbeat update from a node.
+   * 处理来自NodeManager的update信息
    */
   private synchronized void nodeUpdate(RMNode nm) {
     long start = getClock().getTime();
@@ -1023,18 +1027,26 @@ public class FairScheduler extends
           completedContainer, RMContainerEventType.FINISHED);
     }
 
+    //如果开启了持续调度策略，那么FairScheduler会有一个独立的线程在持续调度，不需要等待NodeManager的心跳
     if (continuousSchedulingEnabled) {
-      if (!completedContainers.isEmpty()) {
-        attemptScheduling(node);
+      if (!completedContainers.isEmpty()) { //如果completedContainers不为空，说明这次心跳携带了NodeManager发过来的一些新释放的container，因此，肯定有一些资源被释放了，可以进行一轮调度了
+        attemptScheduling(node); //对这个节点进行一次调度
       }
     } else {
-      attemptScheduling(node);
+      attemptScheduling(node); //如果没有开启持续调度策略，那么调度只能发生在心跳中，因此每次心跳都必须进行一次调度
     }
 
     long duration = getClock().getTime() - start;
     fsOpDurations.addNodeUpdateDuration(duration);
   }
 
+  /**
+   * 这是FairScheduler发起的一个独立线程
+   * 这是yarn的continuous scheduling机制，不用等待NodeManager发送心跳过来，而是通过
+   * CONTINUOUS_SCHEDULING_ENABLED开关和CONTINUOUS_SCHEDULING_SLEEP_MS指定的睡眠时间
+   * 来不断轮询和检查节点进行资源分配，这样，下一次NodeManager的心跳过来，这个分配就可以生效了
+   * @throws InterruptedException
+   */
   void continuousSchedulingAttempt() throws InterruptedException {
     long start = getClock().getTime();
     List<NodeId> nodeIdList = new ArrayList<NodeId>(nodes.keySet());
@@ -1042,11 +1054,15 @@ public class FairScheduler extends
     // containers on emptier nodes first, facilitating an even spread. This
     // requires holding the scheduler lock, so that the space available on a
     // node doesn't change during the sort.
+    //进行调度以前，先对节点根据剩余资源的多少进行排序，从而让资源更充裕的节点先得到调度
+    //这样我们更容易让所有节点的资源能够被均匀分配，而不会因为某些节点总是先被调度所以总是比
+    //后调度的节点的资源使用率更高
     synchronized (this) {
       Collections.sort(nodeIdList, nodeAvailableResourceComparator);
     }
 
-    // iterate all nodes
+
+    // 遍历所有节点，依次对每一个节点进行一次调度
     for (NodeId nodeId : nodeIdList) {
       FSSchedulerNode node = getFSSchedulerNode(nodeId);
       try {
@@ -1054,7 +1070,7 @@ public class FairScheduler extends
             node.getAvailableResource())) {
           attemptScheduling(node);
         }
-      } catch (Throwable ex) {
+      } catch (Throwable ex) { //这每次调度过程中如果发生异常，这个异常将被捕获，因此不会影响在其它节点上进行调度
         LOG.error("Error while attempting scheduling for node " + node +
             ": " + ex.toString(), ex);
         if ((ex instanceof YarnRuntimeException) &&
@@ -1088,6 +1104,10 @@ public class FairScheduler extends
     }
   }
 
+  /**
+   * 开始对节点node进行一次调度
+   * @param node
+   */
   @VisibleForTesting
   synchronized void attemptScheduling(FSSchedulerNode node) {
     if (rmContext.isWorkPreservingRecoveryEnabled()
@@ -1150,15 +1170,23 @@ public class FairScheduler extends
     updateRootQueueMetrics();
   }
 
+  /**
+   * 根据当前队列的已经使用的资源+申请的资源，判断是否小于这个队列的最大资源
+   * @param queue
+   * @param additionalResource
+   * @return
+   */
   static boolean fitsInMaxShare(FSQueue queue, Resource
       additionalResource) {
     Resource usagePlusAddition =
         Resources.add(queue.getResourceUsage(), additionalResource);
 
-    if (!Resources.fitsIn(usagePlusAddition, queue.getMaxShare())) {
+    if (!Resources.fitsIn(usagePlusAddition, queue.getMaxShare())) { //集群当前资源使用量+新应用的资源使用量已经大于队列的最大资源，则直接返回false
       return false;
     }
-    
+
+    //如果资源需求能否在当前队列得到满足，并且如果有父亲队列，则还需要检查父亲队列是否满足
+
     FSQueue parentQueue = queue.getParent();
     if (parentQueue != null) {
       return fitsInMaxShare(parentQueue, additionalResource);

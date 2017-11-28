@@ -271,6 +271,7 @@ public abstract class SchedulerNode {
     return new ArrayList<RMContainer>(launchedContainers.values());
   }
 
+  //实际上实现的是RMContainerImpl
   public synchronized RMContainer getReservedContainer() {
     return reservedContainer;
   }

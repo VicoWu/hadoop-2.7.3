@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 import org.apache.hadoop.yarn.factories.RecordFactory;
 
@@ -93,5 +94,9 @@ public class RecordFactoryPBImpl implements RecordFactory {
   
   private String getPackageName(Class<?> clazz) {
     return clazz.getPackage().getName();
+  }
+
+  public static void main(String[] args) {
+    System.out.println(self.newRecordInstance(Priority.class));
   }
 }

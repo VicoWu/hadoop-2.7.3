@@ -68,7 +68,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
   private static final DefaultResourceCalculator RESOURCE_CALCULATOR
       = new DefaultResourceCalculator();
 
-  private long startTime;
+  private long startTime; //StartTime代表的是这个Application的构造时间
   private Priority priority;
   private ResourceWeights resourceWeights;
   private Resource demand = Resources.createResource(0);
@@ -238,35 +238,37 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     if (rackLocalityThreshold > 1.0) { rackLocalityThreshold = 1.0; }
 
     // If delay scheduling is not being used, can schedule anywhere
-    if (nodeLocalityThreshold < 0.0 || rackLocalityThreshold < 0.0) {
+    if (nodeLocalityThreshold < 0.0 || rackLocalityThreshold < 0.0) { //如果我们没有打开延迟调度策略，那么，直接就用OFF_SWITCH
       return NodeType.OFF_SWITCH;
     }
+    //如果已经配置了延迟调度，则根据
 
-    // Default level is NODE_LOCAL
-    if (!allowedLocalityLevel.containsKey(priority)) {
+    // 默认的本地化策略是NODE_LOCAL
+    if (!allowedLocalityLevel.containsKey(priority)) { //如果这个优先级目前还没有保存在allowedLocalityLevel，则使用默认的NODE_LOCAL的本地化策略
       allowedLocalityLevel.put(priority, NodeType.NODE_LOCAL);
       return NodeType.NODE_LOCAL;
     }
 
-    NodeType allowed = allowedLocalityLevel.get(priority);
+    NodeType allowed = allowedLocalityLevel.get(priority); //如果当前优先级已经有了对应的允许的本地策略略，则根据允许的本地策略
 
     // If level is already most liberal, we're done
-    if (allowed.equals(NodeType.OFF_SWITCH)) return NodeType.OFF_SWITCH;
+    if (allowed.equals(NodeType.OFF_SWITCH)) return NodeType.OFF_SWITCH; //乳沟直接就允许OFF_SWITCH，就OFF_SWITCH
 
     double threshold = allowed.equals(NodeType.NODE_LOCAL) ? nodeLocalityThreshold :
-      rackLocalityThreshold;
+      rackLocalityThreshold; //获取允许的本地级别对应的阈值
 
     // Relax locality constraints once we've surpassed threshold.
-    if (getSchedulingOpportunities(priority) > (numNodes * threshold)) {
+    if (getSchedulingOpportunities(priority) > (numNodes * threshold)) { //如果超过了阈值，则需要进行本地化降级
       if (allowed.equals(NodeType.NODE_LOCAL)) {
-        allowedLocalityLevel.put(priority, NodeType.RACK_LOCAL);
+        allowedLocalityLevel.put(priority, NodeType.RACK_LOCAL); //将本地化策略从NODE_LOCAL降级为RACK_LOCAL
         resetSchedulingOpportunities(priority);
       }
       else if (allowed.equals(NodeType.RACK_LOCAL)) {
-        allowedLocalityLevel.put(priority, NodeType.OFF_SWITCH);
+        allowedLocalityLevel.put(priority, NodeType.OFF_SWITCH); //将本地化策略从RACK_LOCAL降级为OFF_SWITCH
         resetSchedulingOpportunities(priority);
       }
     }
+    //如果还没有达到阈值，则该是什么本地化就还是什么本地化
     return allowedLocalityLevel.get(priority);
   }
 
@@ -279,44 +281,48 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
           long nodeLocalityDelayMs, long rackLocalityDelayMs,
           long currentTimeMs) {
 
+    //默认NODE_LOCAL和RACK_LOCAL的延迟调度时间是-1，代表允许的本地级别是-1
     // if not being used, can schedule anywhere
-    if (nodeLocalityDelayMs < 0 || rackLocalityDelayMs < 0) {
+    if (nodeLocalityDelayMs < 0 || rackLocalityDelayMs < 0) { //如果NODE_LOCAL或者RACK_LOCAL允许off-swtich本地级别的调度，则直接返回OFF_SWITCH的本地级别
       return NodeType.OFF_SWITCH;
     }
 
-    // default level is NODE_LOCAL
+    //默认的本地级别是NODE_LOCAL
     if (! allowedLocalityLevel.containsKey(priority)) {
       allowedLocalityLevel.put(priority, NodeType.NODE_LOCAL);
       return NodeType.NODE_LOCAL;
     }
 
-    NodeType allowed = allowedLocalityLevel.get(priority);
+    NodeType allowed = allowedLocalityLevel.get(priority); //获取这个优先级运行的LOCAL级别
 
     // if level is already most liberal, we're done
-    if (allowed.equals(NodeType.OFF_SWITCH)) {
+    if (allowed.equals(NodeType.OFF_SWITCH)) { //如果这个LOCAL级别直接允许OFF_SWITCH，那就直接OFF_SWITCH
       return NodeType.OFF_SWITCH;
     }
 
+    //如果这个LOCAL级别不允许OFF_SWITCH调度，就需要根据RACK_LOCAL或者NODE_LOCAL以及超时时间进行判断最终是进行NODE_LOCAL、RACK_LOCAL还是OFF_SWITCH的本地级别
     // check waiting time
     long waitTime = currentTimeMs;
-    if (lastScheduledContainer.containsKey(priority)) {
+    if (lastScheduledContainer.containsKey(priority)) { //如果上一次调度的container还有这个优先级的 ， 则用当前时间减去上一个container的调度时间从而获得等待时间
       waitTime -= lastScheduledContainer.get(priority);
     } else {
-      waitTime -= getStartTime();
+      waitTime -= getStartTime();//否则，等待时间就是从这个application启动的时间到现在的时间
     }
 
     long thresholdTime = allowed.equals(NodeType.NODE_LOCAL) ?
-            nodeLocalityDelayMs : rackLocalityDelayMs;
+            nodeLocalityDelayMs : rackLocalityDelayMs; //RACK_LOCAL或者NODE_LOCAL等待的阈值
 
-    if (waitTime > thresholdTime) {
-      if (allowed.equals(NodeType.NODE_LOCAL)) {
-        allowedLocalityLevel.put(priority, NodeType.RACK_LOCAL);
+    //如果目前的等待时间已经超过了thresholdTime
+    if (waitTime > thresholdTime) { //如果等待时间超过了阈值
+      if (allowed.equals(NodeType.NODE_LOCAL)) { //
+        allowedLocalityLevel.put(priority, NodeType.RACK_LOCAL);//将NODE_LOCAL降级为RACK_LOCAL
         resetSchedulingOpportunities(priority, currentTimeMs);
-      } else if (allowed.equals(NodeType.RACK_LOCAL)) {
+      } else if (allowed.equals(NodeType.RACK_LOCAL)) {//将RACK_LOCAL降级为OFF_SWITCH
         allowedLocalityLevel.put(priority, NodeType.OFF_SWITCH);
         resetSchedulingOpportunities(priority, currentTimeMs);
       }
     }
+    //如果等待时间还没有超时，那就不会对locality进行降级，原来是什么，现在还是什么
     return allowedLocalityLevel.get(priority);
   }
 
@@ -506,20 +512,20 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
       boolean reserved) {
 
     // How much does this request need?
-    Resource capability = request.getCapability();
+    Resource capability = request.getCapability(); //请求的资源里那个
 
     // How much does the node have?
-    Resource available = node.getAvailableResource();
+    Resource available = node.getAvailableResource();//这个节点上当前可用的资源
 
     Container container = null;
-    if (reserved) {
+    if (reserved) { //如果已经进行了预留，则把这个预留的container分配给它
       container = node.getReservedContainer().getContainer();
     } else {
-      container = createContainer(node, capability, request.getPriority());
+      container = createContainer(node, capability, request.getPriority()); //在这个节点上创建一个container，来分配个这个应用的请求
     }
 
     // Can we allocate a container on this node?
-    if (Resources.fitsIn(capability, available)) {
+    if (Resources.fitsIn(capability, available)) { //如果这个机器的剩余资源能够满足请求的资源量
       // Inform the application of the new container for this request
       RMContainer allocatedContainer =
           allocate(type, node, request.getPriority(), request, container);
@@ -546,7 +552,8 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
       }
 
       return container.getResource();
-    } else {
+    } else { //这个机器的剩余资源无法满足请求的资源量
+      //判断请求的资源量是否
       if (!FairScheduler.fitsInMaxShare(getQueue(), capability)) {
         return Resources.none();
       }
@@ -601,20 +608,20 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
         }
 
         NodeType allowedLocality;
-        if (scheduler.isContinuousSchedulingEnabled()) {
+        if (scheduler.isContinuousSchedulingEnabled()) { //如果使用的是持续调度，那么需要根据当前的时间确认当前对这个priority可以采取的本地化水平
           allowedLocality = getAllowedLocalityLevelByTime(priority,
               scheduler.getNodeLocalityDelayMs(),
               scheduler.getRackLocalityDelayMs(),
-              scheduler.getClock().getTime());
+              scheduler.getClock().getTime()); //根据时间去决定允许的本地策略是NODE_LOCAL/RACK_LOCAL/OFF_SWITCH
         } else {
           allowedLocality = getAllowedLocalityLevel(priority,
               scheduler.getNumClusterNodes(),
-              scheduler.getNodeLocalityThreshold(),
-              scheduler.getRackLocalityThreshold());
+              scheduler.getNodeLocalityThreshold(), //yarn.scheduler.fair.locality.threshold.node ,这是一个从0到1之间的小数，代表，我必须经过多少次失败的调度，才能允许将本地化策略降级到RACK_LOCAL
+              scheduler.getRackLocalityThreshold());//yarn.scheduler.fair.locality.threshold.node,这是一个从0到1之间的小数，代表，我必须经过多少次失败的调度，才能允许将本地化策略降级到OFF_SWITCH
         }
 
         if (rackLocalRequest != null && rackLocalRequest.getNumContainers() != 0
-            && localRequest != null && localRequest.getNumContainers() != 0) {
+            && localRequest != null && localRequest.getNumContainers() != 0) { //如果NODE_LOCAL/RACK_LOCAL都不是空的，那么进行NODE_LOCAL级别的调度
           return assignContainer(node, localRequest,
               NodeType.NODE_LOCAL, reserved);
         }
@@ -625,13 +632,13 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
 
         if (rackLocalRequest != null && rackLocalRequest.getNumContainers() != 0
             && (allowedLocality.equals(NodeType.RACK_LOCAL) ||
-            allowedLocality.equals(NodeType.OFF_SWITCH))) {
+            allowedLocality.equals(NodeType.OFF_SWITCH))) { //如果RACK_LOCAL的请求不是空的并且允许的本地化策略是RACK_LOCAL/OFF_SWITCH，则进行RACK_LOCAL调度
           return assignContainer(node, rackLocalRequest,
               NodeType.RACK_LOCAL, reserved);
         }
 
         ResourceRequest offSwitchRequest =
-            getResourceRequest(priority, ResourceRequest.ANY);
+            getResourceRequest(priority, ResourceRequest.ANY); //否则，进行OFF_SWITCH调度
         if (offSwitchRequest != null && !offSwitchRequest.getRelaxLocality()) {
           continue;
         }
@@ -641,7 +648,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
           if (!hasNodeOrRackLocalRequests(priority) ||
               allowedLocality.equals(NodeType.OFF_SWITCH)) {
             return assignContainer(
-                node, offSwitchRequest, NodeType.OFF_SWITCH, reserved);
+                node, offSwitchRequest, NodeType.OFF_SWITCH, reserved); //进行OFF_SWITCH调度
           }
         }
       }
@@ -685,9 +692,10 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
    * given node, if the node had full space.
    */
   public boolean hasContainerForNode(Priority prio, FSSchedulerNode node) {
-    ResourceRequest anyRequest = getResourceRequest(prio, ResourceRequest.ANY);
-    ResourceRequest rackRequest = getResourceRequest(prio, node.getRackName());
-    ResourceRequest nodeRequest = getResourceRequest(prio, node.getNodeName());
+    //查找这个优先级下面目前三种请求，一种是没有任何本地化限制的请求，一种是限制为本地机架的请求，一种是限制为本节点内的请求
+    ResourceRequest anyRequest = getResourceRequest(prio, ResourceRequest.ANY); //所有请求，对机架和节点没有要求
+    ResourceRequest rackRequest = getResourceRequest(prio, node.getRackName());//在这个节点所在机架上的请求
+    ResourceRequest nodeRequest = getResourceRequest(prio, node.getNodeName());  //在这个节点上的请求
 
     return
         // There must be outstanding requests at the given priority:

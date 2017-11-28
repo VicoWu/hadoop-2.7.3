@@ -200,7 +200,8 @@ public class SchedulerApplicationAttempt {
   public Collection<Priority> getPriorities() {
     return appSchedulingInfo.getPriorities();
   }
-  
+
+  //
   public synchronized ResourceRequest getResourceRequest(Priority priority, String resourceName) {
     return this.appSchedulingInfo.getResourceRequest(priority, resourceName);
   }

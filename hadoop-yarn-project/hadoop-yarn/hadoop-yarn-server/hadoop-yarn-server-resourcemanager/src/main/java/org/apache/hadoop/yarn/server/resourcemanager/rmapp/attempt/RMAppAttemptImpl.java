@@ -113,7 +113,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
       .getRecordFactory(null);
 
   public final static Priority AM_CONTAINER_PRIORITY = recordFactory
-      .newRecordInstance(Priority.class);
+      .newRecordInstance(Priority.class); //创建一个Priority的实现对象，实际上是一个PriorityImpl
   static {
     AM_CONTAINER_PRIORITY.setPriority(0);
   }

@@ -139,7 +139,7 @@ public class AppSchedulingInfo {
     // Update resource requests
     for (ResourceRequest request : requests) {
       Priority priority = request.getPriority();//请求的优先级
-      String resourceName = request.getResourceName(); //资源名称，一般是指hostname
+      String resourceName = request.getResourceName(); //资源名称，一般是指hostname,rackname或者off-switch请求
       boolean updatePendingResources = false;
       ResourceRequest lastRequest = null;
 
@@ -181,6 +181,8 @@ public class AppSchedulingInfo {
         request.setNumContainers(lastRequest.getNumContainers() + 1);
       }
 
+      //保存资源请求，从这里可以看到，对于某一个priority和locality的请求，只能有一种request,否则，后面的会被前面的覆盖掉
+      //https://issues.apache.org/jira/browse/YARN-314
       asks.put(resourceName, request);
       if (updatePendingResources) {
         
@@ -268,13 +270,15 @@ public class AppSchedulingInfo {
    *          the request
    * @param container
    *          the containers allocated.
+   *
+   * 对请求的资源进行分配，会根据请求的类型是ANY、RACK_LOCAL、NODE_LOCAL调用不通的方法
    */
   synchronized public List<ResourceRequest> allocate(NodeType type,
       SchedulerNode node, Priority priority, ResourceRequest request,
       Container container) {
     List<ResourceRequest> resourceRequests = new ArrayList<ResourceRequest>();
     if (type == NodeType.NODE_LOCAL) {
-      allocateNodeLocal(node, priority, request, container, resourceRequests);
+      (node, priority, request, container, resourceRequests);
     } else if (type == NodeType.RACK_LOCAL) {
       allocateRackLocal(node, priority, request, container, resourceRequests);
     } else {
@@ -304,7 +308,7 @@ public class AppSchedulingInfo {
   /**
    * The {@link ResourceScheduler} is allocating data-local resources to the
    * application.
-   * 
+   * 如果分配了一个NodeLocal的container，那么这个app的ResourceRequest.ANY和对应的RackLocal的Outstanding request需要减1
    * @param allocatedContainers
    *          resources allocated to the application
    */
@@ -312,7 +316,7 @@ public class AppSchedulingInfo {
       Priority priority, ResourceRequest nodeLocalRequest, Container container,
       List<ResourceRequest> resourceRequests) {
     // Update future requirements
-    decResourceRequest(node.getNodeName(), priority, nodeLocalRequest);
+    decResourceRequest(node.getNodeName(), priority, nodeLocalRequest); //将对应的NodeLocal的outstanding请求量减去1
 
     ResourceRequest rackLocalRequest = requests.get(priority).get(
         node.getRackName());
@@ -339,7 +343,7 @@ public class AppSchedulingInfo {
   /**
    * The {@link ResourceScheduler} is allocating data-local resources to the
    * application.
-   * 
+   * 如果分配了一个Rack Local的container，那么这个app的ResourceRequest.ANY的outstanding request值需要减1
    * @param allocatedContainers
    *          resources allocated to the application
    */
@@ -347,7 +351,7 @@ public class AppSchedulingInfo {
       Priority priority, ResourceRequest rackLocalRequest, Container container,
       List<ResourceRequest> resourceRequests) {
     // Update future requirements
-    decResourceRequest(node.getRackName(), priority, rackLocalRequest);
+    decResourceRequest(node.getRackName(), priority, rackLocalRequest);//将对应的RackLocal的outstanding请求量减去1
     
     ResourceRequest offRackRequest = requests.get(priority).get(
         ResourceRequest.ANY);

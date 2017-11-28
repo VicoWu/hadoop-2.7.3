@@ -316,7 +316,7 @@ public class FSLeafQueue extends FSQueue {
       return assigned;
     }
 
-    Comparator<Schedulable> comparator = policy.getComparator();
+    Comparator<Schedulable> comparator = policy.getComparator();//根据对应的policy提供的排序器对apps进行排序
     writeLock.lock();
     try {
       Collections.sort(runnableApps, comparator);
@@ -328,7 +328,7 @@ public class FSLeafQueue extends FSQueue {
     // but we can accept it in practice since the probability is low.
     readLock.lock();
     try {
-      for (FSAppAttempt sched : runnableApps) { //会遍历所有的可以运行的Application，对他们进行资源分配尝试
+      for (FSAppAttempt sched : runnableApps) { //对排序完成的资源一次进行调度，即对他们进行资源分配尝试
         if (SchedulerAppUtils.isBlacklisted(sched, node, LOG)) {
           continue;
         }
@@ -363,7 +363,7 @@ public class FSLeafQueue extends FSQueue {
     FSAppAttempt candidateSched = null;
     readLock.lock();
     try {
-      //从该叶子队列中的所有application中，选择一个更应该被强占的application
+      //从该叶子队列中的所有application中，选择一个更应该被抢占的application
       //如果使用默认Policy FairSharePolicy,那么选择标准就是该Application当前资源
     	//的欠缺或者充裕程度，资源越充裕，越可能被选中
       for (FSAppAttempt sched : runnableApps) {
