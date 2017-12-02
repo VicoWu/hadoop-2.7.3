@@ -193,6 +193,8 @@ public abstract class RMContainerRequestor extends RMCommunicator {
     ResourceBlacklistRequest blacklistRequest =
         ResourceBlacklistRequest.newInstance(new ArrayList<String>(blacklistAdditions),
             new ArrayList<String>(blacklistRemovals));
+    //将ask中存放的请求构造成AllocateRequest对象，发送给远程的RM
+    //这个ask中的添加是在方法addResourceRequestToAsk中进行的
     AllocateRequest allocateRequest =
         AllocateRequest.newInstance(lastResponseID,//上一次请求的responseid
           super.getApplicationProgress(), new ArrayList<ResourceRequest>(ask),
@@ -386,7 +388,13 @@ public abstract class RMContainerRequestor extends RMCommunicator {
   protected Resource getAvailableResources() {
     return availableResources == null ? Resources.none() : availableResources;
   }
-  
+
+  /**
+   * 添加请求，为什么一个请求需要分别为host、rack和off-switch多次添加，
+   * 可以参考董西成的博客http://dongxicheng.org/mapreduce-nextgen/yarnmrv2-mrappmaster-containerallocator/
+   *
+   * @param req
+   */
   protected void addContainerReq(ContainerRequest req) {
     // Create resource requests
     for (String host : req.hosts) {

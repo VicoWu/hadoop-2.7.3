@@ -484,20 +484,21 @@ public class FSLeafQueue extends FSQueue {
   /**
    * Check whether this queue can run this application master under the
    * maxAMShare limit
-   *
-   * @param amResource
+   * 判断当前队列是否能够运行一个ApplicationMaster应用
+   * @param amResource 需要运行的am的资源量
    * @return true if this queue can run
    */
   public boolean canRunAppAM(Resource amResource) {
-    float maxAMShare =
+    float maxAMShare = //获取队列的maxAMShare参数,即队列允许用来运行AM的资源总量
         scheduler.getAllocationConfiguration().getQueueMaxAMShare(getName());
-    if (Math.abs(maxAMShare - -1.0f) < 0.0001) {
+    if (Math.abs(maxAMShare - -1.0f) < 0.0001) { //如果配置的值为-1.0f，则说明没有限制
       return true;
     }
+    //计算队列中可以用来运行AM的最大资源量，即，用队列的FairShare * maxAMShare，这里的fair share指的是instaneous fair share值
     Resource maxAMResource = Resources.multiply(getFairShare(), maxAMShare);
-    Resource ifRunAMResource = Resources.add(amResourceUsage, amResource);
+    Resource ifRunAMResource = Resources.add(amResourceUsage, amResource); //计算如果运行了这个am以后这个队列所有的am的资源使用量
     return !policy
-        .checkIfAMResourceUsageOverLimit(ifRunAMResource, maxAMResource);
+        .checkIfAMResourceUsageOverLimit(ifRunAMResource, maxAMResource);  //对于默认的FairSharePolicy,判断如果运行了这个am，是否超过了maxAMShare的限制
   }
 
   public void addAMResourceUsage(Resource amResource) {

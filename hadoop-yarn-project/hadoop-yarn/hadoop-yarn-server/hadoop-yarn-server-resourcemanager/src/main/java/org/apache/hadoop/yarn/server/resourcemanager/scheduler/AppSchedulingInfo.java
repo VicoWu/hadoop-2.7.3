@@ -278,7 +278,7 @@ public class AppSchedulingInfo {
       Container container) {
     List<ResourceRequest> resourceRequests = new ArrayList<ResourceRequest>();
     if (type == NodeType.NODE_LOCAL) {
-      (node, priority, request, container, resourceRequests);
+      allocateNodeLocal(node, priority, request, container, resourceRequests);
     } else if (type == NodeType.RACK_LOCAL) {
       allocateRackLocal(node, priority, request, container, resourceRequests);
     } else {

@@ -393,7 +393,8 @@ public class MRAppMaster extends CompositeService {
       // service needs to wait some time before it stops so clients can know the
       // final states
       clientService.init(conf);
-      
+
+      //ContainerAllocator用来负责进行资源请求和分配相关的工作
       containerAllocator = createContainerAllocator(clientService, context);
       
       //service to handle the output committer
@@ -872,7 +873,7 @@ public class MRAppMaster extends CompositeService {
         this.containerAllocator = new LocalContainerAllocator(
             this.clientService, this.context, nmHost, nmPort, nmHttpPort
             , containerID);
-      } else {//正常分布式模式，使用RMContainerAllocator
+      } else {//正常分布式模式，使用RMContainerAllocator，RMContainerAllocator继承了RMContainerRequestor和RMCommunicator
         this.containerAllocator = new RMContainerAllocator(
             this.clientService, this.context);
       }

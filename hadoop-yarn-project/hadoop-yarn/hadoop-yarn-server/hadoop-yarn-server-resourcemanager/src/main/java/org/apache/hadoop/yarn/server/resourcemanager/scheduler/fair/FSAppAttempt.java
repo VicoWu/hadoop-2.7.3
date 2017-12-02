@@ -58,6 +58,8 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 
 /**
  * Represents an application attempt from the viewpoint of the Fair Scheduler.
+ * 每一个FSAppAttempt同时也是一个SchedulerApplicationAttempt实现，即一个被具体的调度器可调度的
+ * 对象
  */
 @Private
 @Unstable
@@ -244,7 +246,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     //如果已经配置了延迟调度，则根据
 
     // 默认的本地化策略是NODE_LOCAL
-    if (!allowedLocalityLevel.containsKey(priority)) { //如果这个优先级目前还没有保存在allowedLocalityLevel，则使用默认的NODE_LOCAL的本地化策略
+    if (!allowedLocalityLevel.containsKey(priority)) { //如果这个优先级目前还没有保存在allowedLocalityLevel，则使用默认的NODE_LOCAL的本地化策略，因为我们总是希望进行NodeLocal的调度
       allowedLocalityLevel.put(priority, NodeType.NODE_LOCAL);
       return NodeType.NODE_LOCAL;
     }
@@ -281,14 +283,14 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
           long nodeLocalityDelayMs, long rackLocalityDelayMs,
           long currentTimeMs) {
 
-    //默认NODE_LOCAL和RACK_LOCAL的延迟调度时间是-1，代表允许的本地级别是-1
+    //默认NODE_LOCAL和RACK_LOCAL的延迟调度时间是-1，代表我们的FairSchedulerd调度器
     // if not being used, can schedule anywhere
     if (nodeLocalityDelayMs < 0 || rackLocalityDelayMs < 0) { //如果NODE_LOCAL或者RACK_LOCAL允许off-swtich本地级别的调度，则直接返回OFF_SWITCH的本地级别
       return NodeType.OFF_SWITCH;
     }
 
     //默认的本地级别是NODE_LOCAL
-    if (! allowedLocalityLevel.containsKey(priority)) {
+    if (! allowedLocalityLevel.containsKey(priority)) { //
       allowedLocalityLevel.put(priority, NodeType.NODE_LOCAL);
       return NodeType.NODE_LOCAL;
     }
@@ -527,7 +529,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     // Can we allocate a container on this node?
     if (Resources.fitsIn(capability, available)) { //如果这个机器的剩余资源能够满足请求的资源量
       // Inform the application of the new container for this request
-      RMContainer allocatedContainer =
+      RMContainer allocatedContainer = //尽管request中可以携带多个container，但是，每一轮只会分配一个container，下一个container的分配就要等到下一轮 的分配了
           allocate(type, node, request.getPriority(), request, container);
       if (allocatedContainer == null) {
         // Did the application need this resource?
@@ -581,16 +583,20 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     // For each priority, see if we can schedule a node local, rack local
     // or off-switch request. Rack of off-switch requests may be delayed
     // (not scheduled) in order to promote better locality.
+    //对于排序后的Priority集合，我们依次遍历，获取对应Priority对应的container请求，然后，判断这个container
+    //是应该进行NODE_LOCAL、RACK_LOCAL还是OFF_SWITCH的本地化策略。对于
     synchronized (this) {
       for (Priority priority : prioritiesToTry) {
         if (getTotalRequiredResources(priority) <= 0 ||
-            !hasContainerForNode(priority, node)) {
+            !hasContainerForNode(priority, node)) { //如果这个priority的资源请求<=0或者这个priority的请求都不适合在这个节点上运行 ，那么直接continue,进入下一个priority判断
           continue;
         }
 
         addSchedulingOpportunity(priority);
 
         // Check the AM resource usage for the leaf queue
+        //如果liveContainer==0,并且这个Application的AM是一个managedAM，那么在分配container的时候必须考虑
+        //是否超过了当前队列的maAMShare配置的最大AM比例值
         if (getLiveContainers().size() == 0 && !getUnmanagedAM()) {
           if (!getQueue().canRunAppAM(getAMResource())) {
             return Resources.none();
@@ -598,9 +604,9 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
         }
 
         ResourceRequest rackLocalRequest = getResourceRequest(priority,
-            node.getRackName());
+            node.getRackName()); //获取这个应用请求这个节点所在机架的RACK_LOCAL的请求
         ResourceRequest localRequest = getResourceRequest(priority,
-            node.getNodeName());
+            node.getNodeName()); //获取这个应用请求这个节点的NODE_LOCAL的请求
 
         if (localRequest != null && !localRequest.getRelaxLocality()) {
           LOG.warn("Relax locality off is not supported on local request: "
@@ -621,15 +627,16 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
         }
 
         if (rackLocalRequest != null && rackLocalRequest.getNumContainers() != 0
-            && localRequest != null && localRequest.getNumContainers() != 0) { //如果NODE_LOCAL/RACK_LOCAL都不是空的，那么进行NODE_LOCAL级别的调度
+            && localRequest != null && localRequest.getNumContainers() != 0) { //如果NODE_LOCAL/RACK_LOCAL都不是空的，那么进行NODE_LOCAL级别的调度，因为NODE_LOCAL的优先级最高
           return assignContainer(node, localRequest,
               NodeType.NODE_LOCAL, reserved);
         }
 
+        //准备进行rack_local的调度，但是我们发现rack级别的松弛是false，即不允许松弛到rack,因此无法进行调度了
         if (rackLocalRequest != null && !rackLocalRequest.getRelaxLocality()) {
           continue;
         }
-
+        //rack级别的调度的松弛是true，即允许rack的调度
         if (rackLocalRequest != null && rackLocalRequest.getNumContainers() != 0
             && (allowedLocality.equals(NodeType.RACK_LOCAL) ||
             allowedLocality.equals(NodeType.OFF_SWITCH))) { //如果RACK_LOCAL的请求不是空的并且允许的本地化策略是RACK_LOCAL/OFF_SWITCH，则进行RACK_LOCAL调度
@@ -637,12 +644,16 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
               NodeType.RACK_LOCAL, reserved);
         }
 
+
         ResourceRequest offSwitchRequest =
             getResourceRequest(priority, ResourceRequest.ANY); //否则，进行OFF_SWITCH调度
+
+        //如果offSwitch的松弛是false，即不允许松弛到off-switch ，只能放弃该priority请求的调度
         if (offSwitchRequest != null && !offSwitchRequest.getRelaxLocality()) {
           continue;
         }
 
+        // 允许进行off-switch的调度
         if (offSwitchRequest != null &&
             offSwitchRequest.getNumContainers() != 0) {
           if (!hasNodeOrRackLocalRequests(priority) ||
@@ -690,6 +701,11 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
   /**
    * Whether this app has containers requests that could be satisfied on the
    * given node, if the node had full space.
+   * 关于这个方法的判断条件，为什么如果anyRequest==null就直接返回false，这是因为applicationMaster在
+   * 为应用申请资源的时候，如果是NODE_LOCAL，顺便也会创建这个节点对应的RACK的RACK_LOCAL的请求和offswitch的请求
+   * 这个可以看MRAppMaster发送请求的时候所使用的RMContainerRequestor.addContainerReq()和ApplicationMaster通过
+   * 调用 AMRMClientImpl.addContainerRequest()申请资源的过程
+   * 或者查看董西成的博客http://dongxicheng.org/mapreduce-nextgen/yarnmrv2-mrappmaster-containerallocator/
    */
   public boolean hasContainerForNode(Priority prio, FSSchedulerNode node) {
     //查找这个优先级下面目前三种请求，一种是没有任何本地化限制的请求，一种是限制为本地机架的请求，一种是限制为本节点内的请求

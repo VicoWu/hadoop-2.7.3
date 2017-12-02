@@ -22,7 +22,9 @@ package org.apache.hadoop.yarn.server.resourcemanager.scheduler;
  * Resource classification.
  */
 public enum NodeType {
-  NODE_LOCAL(0), RACK_LOCAL(1), OFF_SWITCH(2);
+  NODE_LOCAL(0),//请求规定了必须运行在某个的服务器节点
+  RACK_LOCAL(1),//请求规定了必须运行在某个机架上
+  OFF_SWITCH(2);//这个请求对本地化没有要求
   public int index;
 
   private NodeType(int index) {

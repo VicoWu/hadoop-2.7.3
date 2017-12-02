@@ -393,7 +393,12 @@ public class AMRMClientImpl<T extends ContainerRequest> extends AMRMClient<T> {
       unregisterApplicationMaster(appStatus, appMessage, appTrackingUrl);
     }
   }
-  
+
+  /**
+   * 我们查看ApplicationMaster.run()，可以看到T是一个 ContainerRequest 对象，一个ContainerRequest
+   * 对象代表为某一个container申请资源
+   * @param req Resource request
+   */
   @Override
   public synchronized void addContainerRequest(T req) {
     Preconditions.checkArgument(req != null,
@@ -407,8 +412,9 @@ public class AMRMClientImpl<T extends ContainerRequest> extends AMRMClient<T> {
             + joiner.join(req.getRacks()));
       }
     }
+    //根据请求的节点获取这些节点所在的机架
     Set<String> inferredRacks = resolveRacks(req.getNodes());
-    inferredRacks.removeAll(dedupedRacks);
+    inferredRacks.removeAll(dedupedRacks);//inferredRacks(推断机架)中存放了节点对应的、并且在所请求的机架中不包含的那些机架
 
     // check that specific and non-specific requests cannot be mixed within a
     // priority
@@ -418,38 +424,40 @@ public class AMRMClientImpl<T extends ContainerRequest> extends AMRMClient<T> {
     // priority. If node and its rack are both specified then they must be 
     // in the same request.
     // For explicitly requested racks, we set locality relaxation to true
+    //检查历史请求中是否有与当前请求的priority相同，并且relaxity是false的请求，如果有，则与当前的RACK_LOCAL的请求冲突
     checkLocalityRelaxationConflict(req.getPriority(), dedupedRacks, true);
+    //检查历史请求中是否有与当前请求的priority相同，并且relaxity与当前的relaxity不同的请求
     checkLocalityRelaxationConflict(req.getPriority(), inferredRacks,
         req.getRelaxLocality());
     // check if the node label expression specified is valid
     checkNodeLabelExpression(req);
 
     if (req.getNodes() != null) {
-      HashSet<String> dedupedNodes = new HashSet<String>(req.getNodes());
-      if(dedupedNodes.size() != req.getNodes().size()) {
+      HashSet<String> dedupedNodes = new HashSet<String>(req.getNodes()); //所请求的、已经去重的那些节点
+      if(dedupedNodes.size() != req.getNodes().size()) { //如果发现去重后的节点数量和请求中原始的节点数量不一致，则报警
         Joiner joiner = Joiner.on(',');
         LOG.warn("ContainerRequest has duplicate nodes: "
             + joiner.join(req.getNodes()));        
       }
-      for (String node : dedupedNodes) {
+      for (String node : dedupedNodes) { //对于去重以后的每一个节点请求，添加到资源请求中，relaxity是true
         addResourceRequest(req.getPriority(), node, req.getCapability(), req,
             true, req.getNodeLabelExpression());
       }
     }
 
-    for (String rack : dedupedRacks) {
+    for (String rack : dedupedRacks) { //对于已经去重了的直接机架(不包含直接请求的host所在的机架)的请求,relaxity是true
       addResourceRequest(req.getPriority(), rack, req.getCapability(), req,
           true, req.getNodeLabelExpression());
     }
 
     // Ensure node requests are accompanied by requests for
     // corresponding rack
-    for (String rack : inferredRacks) {
+    for (String rack : inferredRacks) { //将 根据host所推断出来的机架也进行请求
       addResourceRequest(req.getPriority(), rack, req.getCapability(), req,
           req.getRelaxLocality(), req.getNodeLabelExpression());
     }
 
-    // Off-switch
+    // Off-switch //发送offswitch请求，注意，这个请求没有添加任何附加条件，因此是任何时候都会发送的
     addResourceRequest(req.getPriority(), ResourceRequest.ANY, 
         req.getCapability(), req, req.getRelaxLocality(), req.getNodeLabelExpression());
   }
@@ -574,11 +582,11 @@ public class AMRMClientImpl<T extends ContainerRequest> extends AMRMClient<T> {
     // requested racks. Make sure that existing rack requests match this.
     for (String location : locations) {
         TreeMap<Resource, ResourceRequestInfo> reqs =
-            remoteRequests.get(location);
+            remoteRequests.get(location); //获取当前这个location的历史请求信息
         if (reqs != null && !reqs.isEmpty()) {
-          boolean existingRelaxLocality =
+          boolean existingRelaxLocality = //获取历史请求信息中的relaxity结果
               reqs.values().iterator().next().remoteRequest.getRelaxLocality();
-          if (relaxLocality != existingRelaxLocality) {
+          if (relaxLocality != existingRelaxLocality) { //发现当前请求的locatiion与历史的location相同，但是relaxity不通
             throw new InvalidContainerRequestException("Cannot submit a "
                 + "ContainerRequest asking for location " + location
                 + " with locality relaxation " + relaxLocality + " when it has "
@@ -662,12 +670,12 @@ public class AMRMClientImpl<T extends ContainerRequest> extends AMRMClient<T> {
     if (resourceRequestInfo == null) {
       resourceRequestInfo =
           new ResourceRequestInfo(priority, resourceName, capability,
-              relaxLocality);
+              relaxLocality); //默认的container的数量是0
       reqMap.put(capability, resourceRequestInfo);
     }
     
     resourceRequestInfo.remoteRequest.setNumContainers(
-         resourceRequestInfo.remoteRequest.getNumContainers() + 1);
+         resourceRequestInfo.remoteRequest.getNumContainers() + 1); //container请求的数量+1
 
     if (relaxLocality) {
       resourceRequestInfo.containerRequests.add(req);

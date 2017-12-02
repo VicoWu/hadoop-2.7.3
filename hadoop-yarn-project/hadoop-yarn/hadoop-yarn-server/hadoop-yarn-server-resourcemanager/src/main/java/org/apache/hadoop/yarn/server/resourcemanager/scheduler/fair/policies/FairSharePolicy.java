@@ -148,6 +148,7 @@ public class FairSharePolicy extends SchedulingPolicy {
     return Resources.greaterThan(RESOURCE_CALCULATOR, null, usage, fairShare);
   }
 
+  //对于FairSharePolicy,只是以内存作为参考标准，没有考虑CPU
   @Override
   public boolean checkIfAMResourceUsageOverLimit(Resource usage, Resource maxAMResource) {
     return usage.getMemory() > maxAMResource.getMemory();

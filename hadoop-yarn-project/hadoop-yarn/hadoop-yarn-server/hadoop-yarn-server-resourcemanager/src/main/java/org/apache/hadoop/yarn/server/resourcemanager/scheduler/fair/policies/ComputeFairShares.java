@@ -199,7 +199,7 @@ public class ComputeFairShares {
         setResourceValue(computeShare(sched, right, type),
             ((FSQueue) sched).getSteadyFairShare(), type);//根据全局的right值设置这个队列的steady fair share 值
       } else {
-        setResourceValue(//否则，//根据全局的right值设置这个队列的 fair share 值
+        setResourceValue(//如果是计算instaneous,根据全局的right值设置这个队列的 fair share 值
             computeShare(sched, right, type), sched.getFairShare(), type);
       }
     }
@@ -255,6 +255,7 @@ public class ComputeFairShares {
       boolean isSteadyShare, ResourceType type) {
     int totalResource = 0;//所有队列的总资源求和
 
+    //通过遍历，求schedulables中所有的节点的固定资源之和
     for (Schedulable sched : schedulables) {
       //如果是一个fixed队列，则fixedShare为该队列的minShare或者0
       int fixedShare = getFairShareIfFixed(sched, isSteadyShare, type);
@@ -263,7 +264,8 @@ public class ComputeFairShares {
     	//则将这个Schedulable保存在nonFixedSchedulables中返回
         nonFixedSchedulables.add(sched);
       } else {
-    	//如果是fix队列，那么分两种情况：
+        //更新这个队列的steady fairshare 或者 instaneous fair share
+    	// 如果是fix队列，那么分两种情况：
     	// 如果isSteadyShare=true,即我们计算的是steady fairshares,则将其steady fair share设置为fixedShare
     	// 如果isSteadyShare=false,即我们计算的instaneous fair share,则将这个Schedulable的fairShare(
     	//即instaneous fair share)设置为fixedShare
@@ -276,7 +278,7 @@ public class ComputeFairShares {
             Integer.MAX_VALUE);
       }
     }
-    //返回我们计算得到的所有的 fix-schedulable的资源之和
+    //如果是一个fix队列，则totalResource是这个队列的
     return totalResource;
   }
 
@@ -285,40 +287,34 @@ public class ComputeFairShares {
    *
    * The fairshare is fixed if either the maxShare is 0, weight is 0,
    * or the Schedulable is not active for instantaneous fairshare.
-   * 如果这个Schedulable是一个fixed schedulable，则返回这个fixed-sheculable的资源份额。
-   * fixed-schedulable的定义是：
-   * 这个Schedulbale的maxShare <=0
-   * 或者
-   * 当求instantaneous fair share, 并且这个队列是非活跃队列
-   * 或者
-   * weight <= 0
+   * 如果这个队列的maxShare或者weight配置为0，显然，这个队列在任何时候都不会运行任何app，这个队列是固定队列，并且分配给他的fair share 或者instaneous fair share 都是0
+   * 如果我们当前计算的是instaneous fair share ，并且发现这个队列没有任何app在运行，那么，这个队列的instaneous fair share是0，并且，这个队列被判定为fix sheduler，即，这个队列不再参与
+   * instaneous fair share的计算
+   * 而如果当前我们计算的steady fair share，那么它的steady fair share值跟这个队列上是否有app正在运行无关，其steady fair share的值会瓜分集群资源
    */
   private static int getFairShareIfFixed(Schedulable sched,
       boolean isSteadyShare, ResourceType type) {
 
     // Check if maxShare is 0
-	  //检查最大资源数是否小于0
+	  //检查最大资源数是否小于0，如果<0，说明是一个fixed队列，并且fixed资源是0
     if (getResourceValue(sched.getMaxShare(), type) <= 0) {
       return 0;
     }
 
-    // For instantaneous fairshares, check if queue is active
-    //isSteadyShare为true,代表我们计算的是steady share,此时不区分这个队列
-    //是不是active的， 但是如果isSteadyShare 是false，代表我们目前计算的
-    //是instantaneous fairshares，此时，只要队列不是活跃的，就认为是
-    //fix-schedulable
-    if (!isSteadyShare &&
+    //如果我们当前计算的是instaneous ,并且这个队列上没有任何运行的app，那么认为这是一个fix队列，并且fair scheduler是0
+    if (!isSteadyShare && //如果我们计算的是instaneous fair share，并且这个队列没有运行任何app，返回0
         (sched instanceof FSQueue) && !((FSQueue)sched).isActive()) {
       return 0;
     }
 
     // Check if weight is 0
-    // 如果weight <= 0,则，如果minShare小于等于0 ， 返回0，否则，返回minShare，代表如果weight<=0，那么minShare就是fairShare
+    // 如果weight <= 0，也说明是一个fix队列，此时需要根据minShare的配置确定它的fair share
     if (sched.getWeights().getWeight(type) <= 0) {
       int minShare = getResourceValue(sched.getMinShare(), type);
       return (minShare <= 0) ? 0 : minShare;
     }
-    //这个队列maxShare大于0 并且（isSteadyShare = true 或者 队列是活跃的 ）并且  weight > 0, 则返回 -1,代表这不是一个fixed-schedulable
+
+    //这个队列maxShare大于0 并且（isSteadyShare = true 或者 队列是活跃的 ）并且  weight > 0, 则返回 -1,代表这是一个non-fixed队列
     return -1;
   }
 

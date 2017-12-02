@@ -1128,11 +1128,13 @@ public class FairScheduler extends
     // 1. Check for reserved applications
     // 2. Schedule if there are no reservations
 
-    FSAppAttempt reservedAppSchedulable = node.getReservedAppSchedulable();
+    FSAppAttempt reservedAppSchedulable = node.getReservedAppSchedulable(); //判断这个节点上是否已经是一个被某个应用预留的节点
     if (reservedAppSchedulable != null) { //如果这个节点上已经有reservation
       Priority reservedPriority = node.getReservedContainer().getReservedPriority();
-      FSQueue queue = reservedAppSchedulable.getQueue();
+      FSQueue queue = reservedAppSchedulable.getQueue(); //被预留的应用所在的队列
 
+      //如果这个节点被这个应用预定，这里就去判断这个应用是不是有能够分配到这个node上到请求，如果有这样到请求，并且，没有超过队列到剩余资源，那么，就可以把这个预定的资源尝试进行分配（有可能分配失败）
+      //而如果发现这个应用没有任何一个请求适合在这个节点运行，或者，当前队列的剩余资源已经不够运行这个预留的、还没来得及执行的container，那么这个container就没有再预留的必要了
       if (!reservedAppSchedulable.hasContainerForNode(reservedPriority, node)
           || !fitsInMaxShare(queue,
           node.getReservedContainer().getReservedResource())) {
@@ -1140,7 +1142,7 @@ public class FairScheduler extends
         LOG.info("Releasing reservation that cannot be satisfied for application "
             + reservedAppSchedulable.getApplicationAttemptId()
             + " on node " + node);
-        reservedAppSchedulable.unreserve(reservedPriority, node);
+        reservedAppSchedulable.unreserve(reservedPriority, node); //取消预留
         reservedAppSchedulable = null;
       } else {
         // Reservation exists; try to fulfill the reservation
@@ -1149,10 +1151,11 @@ public class FairScheduler extends
               + reservedAppSchedulable.getApplicationAttemptId()
               + " on node: " + node);
         }
-        node.getReservedAppSchedulable().assignReservedContainer(node);//对这个已经进行了reservation对节点进行节点分配
+        //对这个已经进行了reservation对节点进行节点分配，当然，有可能资源还是不足，因此还将处于预定状态
+        node.getReservedAppSchedulable().assignReservedContainer(node);
       }
     }
-    if (reservedAppSchedulable == null) {//这个节点还没有进行reservation
+    if (reservedAppSchedulable == null) {//这个节点还没有进行reservation，则尝试进行assignment
       // No reservation, schedule at queue which is farthest below fair share
       int assignedContainers = 0;
       while (node.getReservedContainer() == null) { //如果这个节点没有进行reservation，那么，就尝试

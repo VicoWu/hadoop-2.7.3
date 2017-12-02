@@ -88,6 +88,8 @@ import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Allocates the container from the ResourceManager scheduler.
+ * MRAppMaster会构造RMContainerAllocator对象，用来负责进行资源的申请和释放
+ * 资源的申请和释放是交付给ScheduledRequests对象进行的
  */
 public class RMContainerAllocator extends RMContainerRequestor
     implements ContainerAllocator {
@@ -253,9 +255,11 @@ public class RMContainerAllocator extends RMContainerRequestor
   @Override
   /**
    * 这个方法重写了父类方法RMCommunicator.heartbeat()， 在父类方法RMCommunicator.startAllocatorThread()方法中被调用
+   *
    */
   protected synchronized void heartbeat() throws Exception {
     scheduleStats.updateAndLogIfChanged("Before Scheduling: ");
+    //getResource会向RM发送心跳信息，并处理心跳应答
     List<Container> allocatedContainers = getResources();//新分配的container资源
     if (allocatedContainers != null && allocatedContainers.size() > 0) {
       scheduledRequests.assign(allocatedContainers); //将收到的container分配给具体任务
@@ -702,7 +706,7 @@ public class RMContainerAllocator extends RMContainerRequestor
   
   @SuppressWarnings("unchecked")
   /**
-   * 向ResourceManager 发送心跳信息，主要是讲当前系统的资源分配申请、已经完成运行可以释放的container告知远程的RM
+   * 向ResourceManager 发送心跳信息，主要是将当前系统的资源分配申请、已经完成运行可以释放的container告知远程的RM
    * @return 新分配的container
    * @throws Exception
    */
